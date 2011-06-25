@@ -66,10 +66,12 @@ var toggleComments = function() {
     $('input:radio[name^="f_comment"]:checked').each(function() {
         var form = $('#comments-form');
         var list = $('#comments-list');
+        var commentReply = $('#comment-moderate dd.buttons');
         switch ($(this).val()) {
             case 'enabled':
                 form.show();
                 list.show();
+                commentReply.show();
                 break;
 
             case 'disabled':
@@ -80,6 +82,7 @@ var toggleComments = function() {
             case 'locked':
                 form.hide();
                 list.show();
+                commentReply.hide();
                 break;
         }
     });
@@ -269,11 +272,18 @@ function editorsChanged()
  */
 function checkChanged()
 {
-
+    if( $("#f_action_workflow").val() == 'N' ) {
+        <?php
+            if ( count($articleEvents) ) {
+                ?>
+                return confirm('<?php putGS('Please be aware that all scheduled publishing events for this article will be deleted when you set this article to "New" state. Please confirm the state change.'); ?>');
+                <?php
+            }
+        ?>
+    }
     if ((!editorsChanged()) && ($('form.changed').size() == 0)) {
         return true; // continue
     }
-
     return confirm('<?php putGS('Your work has not been saved. Do you want to continue and lose your changes?'); ?>');
 }
 </script>
