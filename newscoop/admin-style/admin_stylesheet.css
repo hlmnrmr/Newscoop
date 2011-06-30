@@ -279,6 +279,7 @@ select {
 	float:left;
 	width:71%;
 	min-width:670px;
+	min-height: 820px;
 }
 .sidebar {
 	float:left;
@@ -1940,7 +1941,7 @@ dl.right-floated {
 					}
 			.versionHolder dl dd {
 				float:left;
-				width:434px;
+				width:400px;
 				margin-bottom:12px;
 				}
 				.versionHolder dl dd input {
@@ -1996,7 +1997,7 @@ dl.right-floated {
 				}
 		.templateSettings dl dd {
 			float:left;
-			width:434px;
+			width:400px;
 			margin-bottom:12px;
 			}
 			.templateSettings dl dd select {
@@ -2231,4 +2232,7 @@ ul#edit-files h2 {
 
 .main-menu-bar ul.navigation ul {
     display: none;
+}
+.datatable tr td.dataTables_empty {
+	padding: 5px 0 5px 7px;
 }
