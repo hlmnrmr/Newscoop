@@ -9,75 +9,68 @@ Created on Jun 8, 2011
 API specifications for themes.
 '''
 
-from newscoop.api.entity import Entity
-from newscoop.core.api.decorator import APIProperty as prop, APIModel as model
-from newscoop.core.api.type import String
+from newscoop.api.entity import Entity, IEntityService, QEntity
+from newscoop.core.api.configure import APIModel as model, APIService as service, \
+    APIQuery as query, APICall as call
+from newscoop.core.api.criteria import AsLike
+from newscoop.core.api.type import List
+from newscoop.api.resource import Resource
+from newscoop.api.publication import Publication
+
+# --------------------------------------------------------------------
 
 @model()
 class Theme(Entity):
     '''
-    Provides the publication model.
+    Provides the theme model.
     '''
-        
-    # ----------------------------------------------------------------
-    
-    @prop(String)
-    def name(self):
-        '''
-        '''
-    
-    @prop(String)
-    def designer(self):
-        '''
-        '''
-    
-    @prop(String)
-    def version(self):
-        '''
-        '''
-        
-    @prop(String)
-    def minorNewscoopVersion(self):
-        '''
-        '''
-    
-    @prop(String)
-    def description(self):
-        '''
-        '''
-    
+    name = str
+    designer = str
+    version = str
+    minorNewscoopVersion = str
+    description = str
+    publication = Publication.id
+    frontImage = Resource.id
+    sectionImage = Resource.id
+    articleImage = Resource.id
+
 # --------------------------------------------------------------------
-
-class IThemeService:
+  
+@query(Theme)
+class QTheme(QEntity):
     '''
+    Provides the theme query model.
     '''
+    name = AsLike
+    designer = AsLike
+    version = AsLike
+    minorNewscoopVersion = AsLike
+    description = AsLike
     
-    # ----------------------------------------------------------------
-    
-    def getThemes(self, orderBy=None, offset=0, limit= -1, publicationId=None, name=None, designer=None, version=None,
-                 minorNewscoopVersion=None, description=None):
-        '''
-        use composition with a base implementation
-        '''
-        
-    def getUnassignedThemes(self, orderBy=None, offset=0, limit= -1, name=None, designer=None, version=None,
-                 minorNewscoopVersion=None, description=None):
-        '''
-        '''
-
-    def getPresentationImages(self, id):
-        '''
-        '''
-
-    def putTheme(self):
-        '''
-        The xml will look like 
-        <theme>
-            <id>1212</id>
-            <name></name>
-        </theme>
-        '''
-        pass
+    def __init__(self): pass #Just to have proper type hinting for criteria
 
 # --------------------------------------------------------------------
 
+@service(Theme)
+class IThemeService(IEntityService):
+    '''
+    Provides the theme service.
+    '''
+    
+    @call(List(Theme.id), Publication.id, QTheme)
+    def forPublication(self, pubId, q=None):
+        '''
+        Provides the themes for the publication searched by the provided query.
+#        '''
+#        
+#    @call(List(Theme.id), QTheme)
+#    def unassigned(self, q=None):
+#        '''
+#        Provides the unassigned themes searched by the provided query.
+#        '''
+#    
+#    @call(List(Resource.id), Theme.id)
+#    def templates(self, id):
+#        '''
+#        Provides the all template resources found for the theme.
+#        '''

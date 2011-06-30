@@ -8,33 +8,34 @@ Created on Jun 8, 2011
 
 API specifications for publication.
 '''
-from newscoop.core.api.decorator import APIProperty, APICall
-from newscoop.api.entity import Entity
 
+from newscoop.api.entity import Entity, IEntityService, QEntity
+from newscoop.core.api.configure import APIModel as model, APIService as service, \
+    APIQuery as query
+from newscoop.core.api.criteria import AsLike
+
+# --------------------------------------------------------------------
+
+@model()
 class Publication(Entity):
     '''
     Provides the publication model.
     '''
-        
-    # ----------------------------------------------------------------
-    
-    @APIProperty(str)
-    def name(self):
-        '''
-        
-        '''
+    name = str
     
 # --------------------------------------------------------------------
 
-class IPublicationService:
+@query(Publication)
+class QPublication(QEntity):
+    '''
+    Provides the publication query model.
+    '''
+    name = AsLike
+
+# --------------------------------------------------------------------
+
+@service(Publication)
+class IPublicationService(IEntityService):
     '''
     Provides services for publication.
     '''
-    
-    # ----------------------------------------------------------------
-    
-    def getQuery(self, orderBy=None, offset=0, limit= -1, name=None):
-        '''
-        use composition with a base implementation
-        '''
-        print(orderBy)

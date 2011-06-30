@@ -8,9 +8,10 @@ Created on Jun 8, 2011
 
 Provides the types used for APIs.
 '''
-from _abcoll import Iterable
+from _abcoll import Iterable, Sized
 from inspect import isclass
-from newscoop.core.util import Uninstantiable
+from newscoop.core.util import Uninstantiable, simpleName, Singletone, guard
+import abc
 import logging
 import numbers
 
@@ -20,11 +21,23 @@ log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------
 
-class Type:
+@guard
+class Type(metaclass=abc.ABCMeta):
     '''
     The class that represents the API types used for mapping data.
     '''
+    
+    def __init__(self, isPrimitive):
+        '''
+        Initializes the type setting the primitive aspect of the type.
+        
+        @param isPrimitive: boolean
+            If true than this type is considered of a primitive nature, meaning that is an boolean, integer,
+            string, float ... .
+        '''
+        self.isPrimitive = isPrimitive
 
+    @abc.abstractmethod
     def isValid(self, obj):
         '''
         Checks if the provided object instance is represented by this API type.
@@ -32,206 +45,228 @@ class Type:
         @param obj: object
                 The object instance to check.
         '''
-        raise NotImplementedError('Override this method')
-    
-class TypeForClass(Type):
+
+class TypeClass(Type):
     '''
     Provides type class validating based on the provided class.
     '''
     
-    def __init__(self, typeClass):
+    def __init__(self, forClass, isPrimitive=False):
         '''
         Initializes the type for the provided type class.
+        @see: Type.__init__
         
-        @param typeClass:class
+        @param forClass:class
             The class to be checked if valid.
         '''
-        assert isclass(typeClass), 'Invalid class %s.' % typeClass
-        self._typeClass = typeClass
-        
-    def getTypeClass(self):
-        '''
-        Provides the type class of this type.
-        @return: class
-            The assigned class of this type.
-        '''
-        return self._typeClass
+        assert isclass(forClass), 'Invalid class %s.' % forClass
+        self.forClass = forClass
+        super().__init__(isPrimitive)
 
     def isValid(self, obj):
-        return isinstance(obj, self._typeClass)
+        '''
+        @see: Type.isValid
+        '''
+        return isinstance(obj, self.forClass)
+    
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.forClass == other.forClass
+        return False
     
     def __str__(self):
-        return '<TypeClass[%s.%s]>' % (self._typeClass.__module__, self._typeClass.__name__)
+        return simpleName(self.forClass)
 
-class TypeHolder:
-    '''
-    Provides a type container for classes. It used by the models to provide a type based on their class, very
-    helpful when the model extends another model. 
-    '''
-
-    @classmethod
-    def getType(cls):
-        '''
-        Provide the type based on the provided class.
-
-        @return: Type
-            The type of the holder.
-        '''
-        raise NotImplementedError('Override this method')
-
-class TypeHolderBasic(TypeHolder):
-    '''
-    Type holder that provides the type from the '_type' class attribute.
-    '''
-    
-    @classmethod
-    def getType(cls):
-        return cls._type
-    
 # --------------------------------------------------------------------
 
-class Boolean(Uninstantiable, TypeHolderBasic):
+class TypeNone(Singletone, Type):
+    '''
+    Provides the type that matches None.
+    '''
+    def __init__(self):
+        '''
+        @see: Type.__init__
+        '''
+        super().__init__(True)
+
+    def isValid(self, obj):
+        '''
+        @see: Type.isValid
+        '''
+        return obj is None
+    
+    def __eq__(self, other):
+        return isinstance(other, TypeNone)
+    
+    def __str__(self):
+        return 'None'
+
+class TypeId(TypeClass):
+    '''
+    Provides the type for the id. This type has to be a primitive type always.
+    '''
+    
+    def __init__(self, forClass):
+        '''
+        Constructs the id type for the provided class.
+        @see: TypeClass.__init__
+        
+        @param forClass: class
+            The class that this type id is constructed on.
+        '''
+        super().__init__(forClass, True)
+
+# --------------------------------------------------------------------
+
+class Non(Uninstantiable):
+    '''
+    Maps the None type.
+    '''
+    #DO NOT Change this field, since it represents the type.
+    api_type = TypeNone()
+    
+class Boolean(Uninstantiable):
     '''
     Maps the boolean values.
     Only used as a class, do not create an instance.
     '''
     #DO NOT Change this field, since it represents the type.
-    _type = TypeForClass(bool)
+    api_type = TypeClass(bool, True)
     
-class Integer(Uninstantiable, TypeHolderBasic):
+class Integer(Uninstantiable):
     '''
     Maps the integer values.
     Only used as a class, do not create an instance.
     '''
     #DO NOT Change this field, since it represents the type.
-    _type = TypeForClass(int)
+    api_type = TypeClass(int, True)
 
-class Number(Uninstantiable, TypeHolderBasic):
+class Number(Uninstantiable):
     '''
     Maps the numbers, this includes integer and float.
     Only used as a class, do not create an instance.
     '''
     #DO NOT Change this field, since it represents the type.
-    _type = TypeForClass(numbers.Number)
+    api_type = TypeClass(numbers.Number, True)
 
-class String(Uninstantiable, TypeHolderBasic):
+class String(Uninstantiable):
     '''
     Maps the string values.
     Only used as a class, do not create an instance.
     '''
     #DO NOT Change this field, since it represents the type.
-    _type = TypeForClass(str)
-    
+    api_type = TypeClass(str, True)
+
+class Id(Uninstantiable):
+    '''
+    Maps the id values.
+    Only used as a class, do not create an instance.
+    '''
+    #DO NOT Change this field, since it represents the type.
+    api_type = TypeId(int)
+
 # --------------------------------------------------------------------
-    
+ 
 class List(Type):
-    pass
-
-# --------------------------------------------------------------------
-
-class Types(Type, Iterable):
     '''
-    This class is basically a collection of Type(s).
-    It used to wrap several types in order to perform checking on data sets.
+    Maps lists of values.
+    You need also to specify in the constructor what elements this list will contain.
     '''
     
-    def __init__(self, types):
+    def __init__(self, type):
         '''
-        Constructs a type set for the provided type set.
+        Constructs the list type for the provided type.
+        @see: Type.__init__
         
-        @param typeSet: iterable|type|None
-            The type or types to be described by this set, can be even None for a empty type set.
+        @param type: Type|class
+            The type of the list.
         '''
-        self._types = []
-        if isclass(types):
-            self._types.append(asType(types))
-        elif isinstance(types, Iterable):
-            for type in types:
-                self._types.append(asType(type))
-        elif not types is None:
-            raise AssertionError('The types set needs to be a type or collection of types, provide None if an empty type set is required')
-        self._types = tuple(self._types)
+        self.itemType = typeFor(type)
+        super().__init__(False)
         
-    def isValid(self, obj):
+
+    def isValid(self, list):
         '''
-        Checks if the provided sequence of object instances is represented
-        by this set of API types.
-        
-        @param obj: tuple|obj
-                The object instances sequence to check.
+        @see: Type.isValid
         '''
-        if isinstance(obj, tuple):
-            if not len(obj) == len(self._types):
-                return False
-            for type, value in zip(self._types, obj):
-                if not type.isValid(value):
+        if isinstance(list, Iterable) and isinstance(list, Sized):
+            for obj in list:
+                if not self.itemType.isValid(obj):
                     return False
-        elif len(self._types) == 1:
-            if not self._types[0].isValid(obj):
-                return False
-        else:
-            if not obj is None:
-                return False
-        return True
-            
-    def __len__(self):
-        '''
-        Provides the number of types that this type set contains.
-        
-        @return: int
-            The number of types contained.
-        '''
-        return len(self._types)
+            return True
+        return False
     
-    def __iter__(self):
-        for type in self._types:
-            yield type
-            
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.itemType == other.itemType
+        return False
+    
     def __str__(self):
-        return '<Types[%s]>' % ', '.join([str(type) for type in self])
+        return 'List(%s)' % self.itemType
 
 # --------------------------------------------------------------------
 
-class PropertyType(Type):
+class TypeModel(TypeClass):
+    '''
+    Provides the type for the model.
+    '''
+    
+    def __init__(self, model):
+        '''
+        Constructs the model type for the provided model.
+        @see: TypeClass.__init__
+        
+        @param model: Model
+            The model that this type is constructed on.
+        '''
+        from newscoop.core.api.operator import Model
+        assert isinstance(model, Model), 'Invalid model provided %s' % model
+        self.model = model
+        super().__init__(model.modelClass, False)
+
+class TypeQuery(TypeClass):
+    '''
+    Provides the type for the query.
+    '''
+    
+    def __init__(self, query):
+        '''
+        Constructs the query type for the provided query.
+        @see: Type.__init__
+        
+        @param query: Query
+            The query that this type is constructed on.
+        '''
+        from newscoop.core.api.operator import Query
+        assert isinstance(query, Query), 'Invalid query provided %s' % query
+        self.query = query
+        super().__init__(query.queryClass, False)
+
+class TypeProperty(Type):
     '''
     This type is used to wrap model property as types. So whenever a type is provided based on a Model property
     this type will be used. Contains the type that is reflected based on the property type also contains the 
-    Property and the Model class that is constructed on. This type behaves as the type assigned to the property 
+    Property and the Model that is constructed on. This type behaves as the type assigned to the property 
     and also contains the references to the property and model class.
     '''
     
-    def __init__(self, modelClass, property):
+    def __init__(self, model, property):
         '''
-        Constructs the model type for the provided property and model class.
+        Constructs the model type for the provided property and model.
+        @see: Type.__init__
         
-        @param modelClass: class
-            The model class of the type.
+        @param model: Model
+            The model of the type.
         @param property: Property
             The property that this type is constructed on.
         '''
         from newscoop.core.api.operator import Property, Model
-        assert issubclass(modelClass, Model), 'Invalid model class %s' % modelClass
+        assert isinstance(model, Model), 'Invalid model %s' % model
         assert isinstance(property, Property), 'Invalid property %s' % property
-        self._modelClass = modelClass
-        self._property = property
-        
-    def getModelClass(self):
-        '''
-        Provides the model class that this type is constructed on.
-        
-        @return: class
-            The model class of the type.
-        '''
-        return self._modelClass
-    
-    def getProperty(self):
-        '''
-        Provides the property that this type is constructed on.
-        
-        @return: Property
-            The property of the type.
-        '''
-        return self._property
+        assert isinstance(property.type, Type), 'Invalid property type %s' % type
+        self.model = model
+        self.property = property
+        super().__init__(property.type.isPrimitive)
 
     def isValid(self, obj):
         '''
@@ -240,37 +275,51 @@ class PropertyType(Type):
         @param obj: object
                 The object instance to check.
         '''
-        return self._property.getType().isValid(obj)
+        return self.property.type.isValid(obj)
+        
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.model == other.model and self.property == other.property
+        return False
 
     def __str__(self):
-        return '<ModelType[%s]>' % self._property
+        return '%s.%s' % (self.model.name, self.property.name)
 
 # --------------------------------------------------------------------
 
-def asType(type):
+def typeFor(obj, type=None):
     '''
-    First checks if the provided parameter is not already an instance of a Type.
-    If not it will provides the conversion to an instance if that type is singletone.
-    In order to attach types to classes you just need to provide them as a class attribute
-    under the name '_type'.
-
-    @param type: Type|class
+    If the type is provided it will be associate with the obj, if the type is not provided than this function
+    will try to provide if it exists the type associated with the obj, or check if the obj is not a type itself and
+    provide that.
+    
+    @param obj: object
+        The class to associate or extract the model.
+    @param type: Type
+        The type to associate with the obj.
+    @return: Type|None
+        If the type has been associate then the return will be none, if the type is being extracted it can return
+        either the Type or None if is not found.
     '''
-    if isclass(type):
-        if type == bool:
-            return Boolean.getType()
-        elif type == int:
-            return Integer.getType()
-        elif type == float:
-            return Number.getType()
-        elif type == numbers.Number:
-            return Number.getType()
-        elif type == str:
-            return String.getType()
-        elif issubclass(type, TypeHolder):
-            type = type.getType()
-        else:
-            raise AssertionError('Invalid class %s provided, it should at least extend TypeHolder' % type)
-    assert isinstance(type, Type), 'Invalid instance %s, is not of a Type class' % type
-    return type
-
+    if type is None:
+        type = getattr(obj, 'api_type', None)
+        if type is None:
+            if obj is None:
+                return Non.api_type
+            if isclass(obj):
+                if obj == bool:
+                    return Boolean.api_type
+                elif obj == int:
+                    return Integer.api_type
+                elif obj == float:
+                    return Number.api_type
+                elif obj == numbers.Number:
+                    return Number.api_type
+                elif obj == str:
+                    return String.api_type
+            if isinstance(obj, Type):
+                type = obj
+        return type
+    assert isinstance(type, Type), 'Invalid type %s' % type
+    assert 'api_type' not in obj.__dict__, 'Already has a type %s' % obj
+    setattr(obj, 'api_type', type)

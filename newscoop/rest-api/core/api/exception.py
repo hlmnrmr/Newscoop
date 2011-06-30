@@ -10,17 +10,19 @@ Provides the exceptions that are used in communicating issues in the API.
 The internal errors (the ones that are made by the implementation and not data) are AssertionError.
 '''
 
-from newscoop.core.internationalization import msg as _
+from newscoop.core.internationalization import Message
+from newscoop.core.util import guard
 
 # --------------------------------------------------------------------
 
+@guard
 class APIException(Exception):
     '''
     Provides the exception that are targeted to reach the API communication.
     So basically this type of exception will be propagated to the client.
     '''
 
-    def __init__(self, msg, *args):
+    def __init__(self, message):
         '''
         Initializes the exception based on the message which will be used as a key.
         
@@ -31,7 +33,9 @@ class APIException(Exception):
         @param *args: list 
             The arguments to be used instead of the place holders in the message.
         '''
-        super().__init__(_(msg, *args))
+        assert isinstance(message, Message), 'Invalid message %s' % message
+        self.message = message
+        super().__init__(message.default)
 
 # --------------------------------------------------------------------
 
@@ -40,13 +44,13 @@ class InputException(APIException):
     Wraps exceptions that are related to input data.
     '''
     
-    def __init__(self, msg, *args):
-        super().__init__(msg, *args)
+    def __init__(self, message):
+        super().__init__(message)
         
 class OutputException(APIException):
     '''
     Wraps exceptions that are related to output data.
     '''
     
-    def __init__(self, msg, *args):
-        super().__init__(msg, *args)
+    def __init__(self, message):
+        super().__init__(message)

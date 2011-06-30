@@ -9,12 +9,13 @@ Created on May 29, 2011
 Provides the containers that describe the APIs.
 '''
 
-from _abcoll import Iterable
-from inspect import ismodule, getargspec
+from inspect import ismodule, getargspec, isclass
 from newscoop.core.api.exception import InputException, OutputException
-from newscoop.core.api.type import Type, Types, TypeHolder, TypeForClass
+from newscoop.core.api.type import Type, TypeClass
+from newscoop.core.internationalization import msg as _
+from newscoop.core.util import simpleName, guard
 import logging
-
+from _abcoll import Iterable
 
 # --------------------------------------------------------------------
 
@@ -22,50 +23,34 @@ log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------
 
-class Model(TypeHolder):
+@guard
+class Properties:
     '''
-    Used for mapping the API models.
+    Used for mapping the API properties.
     '''
-    
-    @classmethod
-    def getProperties(cls):
-        '''
-        Provides the properties of this model class.
-        
-        @return: tuple
-            The list containing the properties of the model.
-        '''
-        
-        try: return cls._properties
-        except AttributeError: 
-            raise AssertionError('Not initialized %s, maybe you forgot to decorate the model with APIModel?' % cls)
-    
-    @classmethod
-    def getType(cls):
-        '''
-        @see: TypeHolder.getType
-        '''
-        try: return cls._type
-        except AttributeError: 
-            raise AssertionError('Not initialized %s, maybe you forgot to decorate the model with APIModel?' % cls)
-    
-    @classmethod
-    def _initialize(cls, properties):
-        '''
-        TO BE USED ONLY BE SPECIALLY DESIGNED CLASSES.
-        Initialize the properties of this model class.
-        
-        @param properties: Iterable
-            The properties list that belong to this model class.
-        '''
-        
-        assert cls != Model, 'The Model needs to be extended, you cannot add properties directly to the Model'
-        assert isinstance(properties, Iterable), 'The properties %s need to be a iterable' % properties
-        if __debug__:
-            for prop in properties : assert isinstance(prop, Property), 'Not a Property type for %s' % prop
-        cls._properties = tuple(properties)
-        cls._type = TypeForClass(cls)
 
+    def __init__(self, properties):
+        '''
+        Constructs a properties group.
+        
+        @param properties: dictionary
+            A dictionary containing as a key the property name and as a value the property.
+        '''
+        assert isinstance(properties, dict), 'The properties %s need to be a dictionary' % properties
+        if __debug__:
+            for prop in properties.values():
+                assert isinstance(prop, Property), 'Not a Property type for %s' % prop
+        self.properties = properties
+    
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.properties == other.properties
+        return False
+    
+    def __str__(self):
+        return '<%s %s>' % (simpleName(self), [str(prop) for prop in self.properties.values()])
+
+@guard
 class Property:
     '''
     Provides the container for the API property types. It contains the operation that need to be
@@ -80,31 +65,15 @@ class Property:
             The name of the property as it should be called by.
         @param type: Type
             The Type of the property.
+        @ivar _var: string
+            Contains the name of the attribute that will be used for keeping the property value.
         '''
         assert isinstance(name, str) and str != '', 'Provide a valid name'
         assert isinstance(type, Type), 'Invalid type %s' % type
-        self._type = type
-        self._name = name
-        # Prefixes the name of the fields that are placed in the model automatically.
-        self._var = '__prop_' + name
-        
-    def getName(self):
-        '''
-        Provides the name of the property.
-        
-        @return: string
-            The name of the property.
-        '''
-        return self._name
-    
-    def getType(self):
-        '''
-        Provides the type of the property.
-        
-        @return: Type
-            The type of the property.
-        '''
-        return self._type
+        self.type = type
+        self.name = name
+        # The name of the attributes that are placed in the model automatically.
+        self._var = 'prop_' + name
     
     def get(self, model):
         '''
@@ -126,10 +95,11 @@ class Property:
             The value to set, needs to be valid for this property.
         '''
         assert not model is None, 'Invalid model object (None)'
-        if not value is None and not self._type.isValid(value):
-            raise InputException('The property $1 takes a parameter of type $2, illegal value type $3',
-                                 self._name, self._type._typeClass, value.__class__.__name__)
+        if not value is None and not self.type.isValid(value):
+            raise InputException(_('The property $1 takes a parameter of type $2, illegal value $3',
+                                 self.name, self.type, value))
         setattr(model, self._var, value)
+        log.debug('Success on setting value (%s) for %s', value, self)
     
     def remove(self, model):
         '''
@@ -137,183 +107,153 @@ class Property:
         
         @param model: object
             The model instance to remove the value from.
-         '''
+        @return: boolean
+            True if there has been something to remove, false otherwise.
+        '''
         assert not model is None, 'Invalid model object (None)'
-        delattr(model, self._var)
+        if hasattr(model, self._var):
+            delattr(model, self._var)
+            log.debug('Success on removing value for %s', self)
+            return True
+        return False
+    
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.name == other.name and self.type == other.type
+        return False
 
     def __str__(self):
-        return '<Property[%s = %s]>' % (self._name, self._type)
-        
+        return '<%s[%s = %s]>' % (simpleName(self), self.name, self.type)
+
 # --------------------------------------------------------------------
 
+@guard(ifNoneSet='query')
+class Model(Properties):
+    '''
+    Used for mapping the API models.
+    @attention: The model will allow only for primitive types.
+    @see: Properties
+    '''
+
+    def __init__(self, modelClass, properties):
+        '''
+        Constructs a properties model.
+        @see: Properties.__init__
+        
+        @param modelClass: class
+            The represented model class.
+        @ivar query: Query
+            The query of the model, needs to be assigned by the declared query for the model.
+        @ivar name: string
+            The name of the model.
+        '''
+        assert isclass(modelClass), 'Invalid model class %s' % modelClass
+        self.modelClass = modelClass
+        self.name = simpleName(modelClass)
+        self.query = None
+        super().__init__(properties)
+        if __debug__:
+            for prop in properties.values():
+                assert prop.type.isPrimitive, 'Not a primitive type for %s' % prop
+
+    def __eq__(self, other):
+        if super().__eq__(other):
+            return self.modelClass == other.modelClass and self.name == other.name
+        return False
+
+    def __str__(self):
+        return '<%s (%s) %s>' % (simpleName(self), self.name, \
+                                 [str(prop) for prop in self.properties.values()])
+       
+# --------------------------------------------------------------------
+
+@guard
 class Query:
     '''
     Used for mapping the API query.
     '''
-    
-    @classmethod
-    def getCriterias(cls):
+
+    def __init__(self, queryClass, criteriaEntries):
         '''
-        Provides the criteria's of this query class.
+        Initialize the criteria's of this query.
         
-        @return: tuple
-            The tuple containing the criteria's of the query.
+        @param queryClass: class
+            The represented query class.
+        @param criteriaEntries: dictionary
+            The criteria's dictionary that belong to this query, as a key is the criteria name (how is been 
+            declared in the query) and as a value the criteria entry.
         '''
-        try: return cls._criterias
-        except AttributeError: 
-            raise AssertionError('Not initialized %s, maybe you forgot to decorate the query with APIQuery?' \
-                                 % cls)
+        assert isclass(queryClass), 'Invalid query class %s' % queryClass
+        assert isinstance(criteriaEntries, dict), \
+        'The criteria entries %s needs to be a dictionary' % criteriaEntries
+        if __debug__:
+            for crt in criteriaEntries.values():
+                assert isinstance(crt, CriteriaEntry), 'Not a CriteriaEntry %s' % crt
+        self.queryClass = queryClass
+        self.criteriaEntries = criteriaEntries
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.queryClass == other.queryClass and self.criteriaEntries == other.criteriaEntries
+        return False
+
+    def __str__(self):
+        return '<%s %s>' % (simpleName(self.queryClass), [str(entry) for entry in self.criteriaEntries.values()])
+ 
+class CriteriaEntry(Property):
+    '''
+    Contains a criteria entry in a query. 
+    @see: Property
+    '''
     
-    @classmethod
-    def _initialize(cls, criterias):
+    def __init__(self, criteria, name):
         '''
-        TO BE USED ONLY BE SPECIALLY DESIGNED CLASSES.
-        Initialize the criteria's of this query class.
+        Constructs a criteria entry.
+        @see: Property.__init__
         
-        @param criterias: Iterable
-            The criteria's list that belong to this query class.
+        @param criteria: Criteria
+            The criteria that is being used by this entry.
         '''
-        assert cls != Query, \
-        'The Query needs to be extended, you cannot add criteria directly to the Query'
-        assert isinstance(criterias, Iterable), 'The criteria %s need to be a iterable' % criterias
-        assert all([isinstance(crt, Criteria) for crt in criterias]), 'Not a Criteria type for %s' % crt
-        cls._criterias = tuple(criterias)
-    
-class Criteria:
+        assert isinstance(criteria, Criteria), 'Invalid criteria %s' % criteria
+        self.criteria = criteria
+        super().__init__(name, TypeClass(criteria.criteriaClass))
+
+class Criteria(Properties):
     '''
     Used for mapping the API criteria.
+    @attention: The criteria will allow only for primitive types.
+    @see: Properties
     '''
-    
-    @classmethod
-    def getConditions(cls):
+
+    def __init__(self, criteriaClass, properties):
         '''
-        Provides the conditions of this criteria class.
-        
-        @return: tuple
-            The list containing the properties of the model.
-        '''
-        try: return cls._conditions
-        except AttributeError: 
-            raise AssertionError('Not initialized %s, maybe you forgot to decorate the criteria with APICriteria?' \
-                                 % cls)
-    
-    @classmethod
-    def _initialize(cls, conditions):
-        '''
-        TO BE USED ONLY BE SPECIALLY DESIGNED CLASSES.
-        Initialize the conditions of this criteria class.
-        
-        @param conditions: Iterable
-            The conditions list that belong to this criteria class.
-        '''
-        assert cls != Criteria, \
-        'The Criteria needs to be extended, you cannot add conditions directly to the Criteria'
-        assert isinstance(conditions, Iterable), 'The conditions %s need to be a iterable' % conditions
-        assert all([isinstance(cond, Condition) for cond in conditions]), 'Not a Condition type for %s' % cond
-        cls._conditions = tuple(conditions)
-        
-    def _initializeInstance(self, name):
-        '''
-        TO BE USED ONLY BE SPECIALLY DESIGNED CLASSES.
         Initialize the criteria instance by providing the name under which the criteria has been declared.
+        @see: Properties.__init__
         
-        @param name: string
-            The name under which the criteria has been declared in the query class.
+        @param criteriaClass: class
+            The represented criteria class.
         '''
-        assert not hasattr(self, '_name'), 'Already initialized'
-        assert isinstance(name, str), 'Invalid string for name %s ' % name
-        self._name = name
+        assert isclass(criteriaClass), 'Invalid criteria class %s' % criteriaClass
+        self.criteriaClass = criteriaClass
+        super().__init__(properties)
+        if __debug__:
+            for prop in properties.values():
+                assert prop.type.isPrimitive, 'Not a primitive type for %s' % prop
 
-    def getName(self):
-        '''
-        Provides the name for this criteria instance.
-        
-        @return: string
-            The criteria name.
-        '''
-        try: return self._name
-        except AttributeError: 
-            raise AssertionError('Not initialized %s, maybe you forgot to decorate the query with APIQuery?' % self)
-        
-class Condition:
-    '''
-    Provides the container for the API condition types. It contains the operation that need to be
-    applied on a query instance that relate to this condition.
-    '''
-
-    def __init__(self, name, type):
-        '''
-        Constructs a condition operations container.
-        
-        @param name: string
-            The name of the condition as it should be called by.
-        @param type: Type
-            The Type of the condition.
-        '''
-        assert isinstance(name, str) and str != '', 'Provide a valid name'
-        assert isinstance(type, Type), 'Invalid type %s' % type
-        self._type = type
-        self._name = name
-        # Prefixes the name of the fields that are placed in the query automatically.
-        self._var = '__cond_' + name + '_'
-    
-    def get(self, criteria, query):
-        '''
-        Provides the value represented by this condition for the provided instance.
-        
-        @param criteria: Criteria
-            The criteria instance that contains this condition.
-        @param query: object
-            The query instance to provide the value for.
-        '''
-        assert isinstance(criteria, Criteria), 'Invalid criteria %s' % criteria
-        assert not query is None, 'Invalid query object (None)'
-        return getattr(query, self._var + criteria.getName(), None)
-    
-    def set(self, criteria, query, value):
-        '''
-        Set the value represented by this condition for the provided query instance.
-        
-        @param criteria: Criteria
-            The criteria instance that contains this condition.
-        @param query: object
-            The query instance to set the value to.
-        @param value: object
-            The value to set, needs to be valid for this condition.
-        '''
-        assert isinstance(criteria, Criteria), 'Invalid criteria %s' % criteria
-        assert not query is None, 'Invalid query object (None)'
-        if not value is None and not self._type.isValid(value):
-            raise InputException('The condition $1 takes a parameter of type $2, illegal value type $3',
-                                 self._name, self._type._typeClass, value.__class__.__name__)
-        setattr(query, self._var + criteria.getName(), value)
-        return value
-    
-    def remove(self, criteria, query):
-        '''
-        Remove the value represented by this condition from the provided query instance.
-        
-        @param criteria: Criteria
-            The criteria instance that contains this condition.
-        @param query: object
-            The query instance to remove the value from.
-         '''
-        assert isinstance(criteria, Criteria), 'Invalid criteria %s' % criteria
-        assert not query is None, 'Invalid model object (None)'
-        delattr(query, self._var + criteria.getName())
-    
-    def __str__(self):
-        return '<Condition[%s = %s]>' % (self._name, self._type)
-    
+    def __eq__(self, other):
+        if super().__eq__(other):
+            return self.criteriaClass == other.criteriaClass
+        return False
 # --------------------------------------------------------------------
 
+@guard
 class Call:
     '''
     Provides the container for a service call. This class will basically contain all the
     Property types that are involved in input and output from the call.
     '''
     
-    def __init__(self, name, outputType, inputTypes):
+    def __init__(self, name, outputType, inputTypes, mandatoryCount):
         '''
         Constructs an API call that will have the provided input and output types.
         
@@ -321,16 +261,26 @@ class Call:
             The name of the function that will be called on the service implementation.
         @param outputType: Type
             The output type for the service call.
-        @param inputTypes: Types
-            The input types for the service call.
+        @param inputTypes: list
+            A list containing all the input types of the call.
+        @param mandatoryCount: integer
+            Provides the count of the mandatory input types, if the mandatory count is two and we have three input
+            types it means that just the first two parameters need to be provided.
         '''
         assert isinstance(name, str) and str != '', 'Provide a valid name'
         assert isinstance(outputType, Type), 'Invalid output Type %s' % outputType
-        assert isinstance(inputTypes, Types), 'Invalid input Types %s' % inputTypes
-        self._name = name
-        self._outputType = outputType
-        self._inputTypes = inputTypes
-    
+        assert isinstance(inputTypes, list), 'Invalid input Types %s, needs to be a list' % inputTypes
+        assert isinstance(mandatoryCount, int), 'Invalid mandatory count <%s>, needs to be integer' % mandatoryCount
+        assert mandatoryCount >= 0 and mandatoryCount <= len(inputTypes), \
+        'Invalid mandatory count <%s>, needs to be greater than 0 and less than ' % (mandatoryCount, len(inputTypes))
+        if __debug__:
+            for typ in inputTypes:
+                assert isinstance(typ, Type), 'Not a input Type %s' % typ
+        self.name = name
+        self.outputType = outputType
+        self.inputTypes = inputTypes
+        self.mandatoryCount = mandatoryCount
+
     def isCallable(self, impl):
         '''
         Checks if the provided implementation class contains the required function
@@ -344,7 +294,7 @@ class Call:
         else:
             func = self._findClassFunction(impl.__class__)
         return not func is None
-        
+    
     def call(self, impl, args):
         '''
         Performs the check of the input and output parameters for a service call
@@ -353,16 +303,21 @@ class Call:
         @param impl: object
             The implementation that reflects the service call that is
             contained by this call.
-        @param args: tuple
+        @param args: list
             The arguments to be used in invoking the service 
         '''
         assert not impl is None, 'Provide the service implementation to be used foe calling the represented function'
-        assert isinstance(args, tuple), 'The arguments %s need to be a tuple' % args
-        
-        if not self._inputTypes.isValid(args):
-            raise InputException('The arguments $1 provided are not compatible with the expected input $2',
-                                 args, self._inputTypes)
-        
+        assert isinstance(args, Iterable), 'The arguments %s need to be iterable' % str(args)
+        valid = False
+        if len(args) >= self.mandatoryCount and len(self.inputTypes) >= len(args):
+            valid = True
+            for type, value in zip(self.inputTypes, args):
+                if not type.isValid(value):
+                    valid = False
+                    break
+        if not valid:
+            raise InputException(_('The arguments $1 provided are not compatible with the expected input $2',
+                                 args, self.inputTypes))
         if ismodule(impl):
             func = self._findModuleFunction(impl)
             assert not func is None, \
@@ -374,11 +329,12 @@ class Call:
             'Could not locate any function to call on the provided service class implementation'
             ret = func.__call__(impl, *args)
             
-        if not self._outputType.isValid(ret):
-            raise OutputException('The return ($1) provided is not compatible with the expected output $2',
-                                 ret, self._outputType)
+        if not self.outputType.isValid(ret):
+            raise OutputException(_('The return $1 provided is not compatible with the expected output type $2',
+                                 ret, self.outputType))
         
-        log.debug('Success calling %s with arguments %s and return %s', func, args, ret)
+        log.debug('Success calling <%s> with arguments %s and return class %s', \
+                  func.__name__, args, simpleName(ret))
         return ret
     
     def _findClassFunction(self, implClass):
@@ -389,11 +345,15 @@ class Call:
             Returns the function if found for the provided class or None
             if no such function could be located.
         '''
-        func = getattr(implClass, self._name, None)
+        func = getattr(implClass, self.name, None)
         if not func is None:
             fnArgs = getargspec(func)
-            if len(fnArgs.args) == len(self._inputTypes) + 1:
-                return func
+            if len(fnArgs.args) == 1 + len(self.inputTypes):
+                if fnArgs.defaults is None:
+                    if len(self.inputTypes) - self.mandatoryCount == 0:
+                        return func
+                elif len(self.inputTypes) - self.mandatoryCount == len(fnArgs.defaults):
+                    return func
                         
     def _findModuleFunction(self, implModule):
         '''
@@ -403,66 +363,59 @@ class Call:
             Returns the function if found for the provided module or None
             if no such function could be located.
         '''
-        func = getattr(implModule, self._name, None)
+        func = getattr(implModule, self.name, None)
         if not func is None:
             fnArgs = getargspec(func)
-            if len(fnArgs.args) == len(self._inputTypes):
-                return func
+            if len(fnArgs.args) == len(self.inputTypes):
+                if fnArgs.defaults is None:
+                    if len(self.inputTypes) - self.mandatoryCount == 0:
+                        return func
+                elif len(self.inputTypes) - self.mandatoryCount == len(fnArgs.defaults):
+                    return func
 
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.name == other.name and self.outputType == other.outputType \
+                and self.inputTypes == other.inputTypes and self.mandatoryCount == other.mandatoryCount
+        return False
+    
     def __str__(self):
-        return '<Call[%s %s(%s)]>' % (self._outputType, self._name, self._inputTypes)
+        inputStr = []
+        for i, typ in enumerate(self.inputTypes):
+            inputStr.append(('defaulted:' if i >= self.mandatoryCount else '') + str(typ))
+        return '<Call[%s %s(%s)]>' % (self.outputType, self.name, ', '.join(inputStr))
 
+@guard
 class Service:
     '''
     Used for mapping the API calls.
     '''
-    
-    @classmethod
-    def getCalls(cls):
-        '''
-        Provides the calls of this service class.
-        
-        @return: tuple
-            The list containing the calls of the service.
-        '''
-        try: return cls._calls
-        except AttributeError: 
-            raise AssertionError('Not initialized %s, maybe you forgot to decorate the service with APIService?'\
-                                  % cls)
-    
-    @classmethod
-    def _initialize(cls, calls):
-        '''
-        TO BE USED ONLY BE SPECIALLY DESIGNED CLASSES.
-        Initialize the calls of this service class.
-        
-        @param calls: Iterable
-            The calls list that belong to this service class.
-        '''
-        assert cls != Service, 'The Service needs to be extended, you cannot add calls directly to the Service'
-        assert isinstance(calls, Iterable), 'The calls %s need to be a iterable' % calls
-        assert all([isinstance(call, Call) for call in calls]), 'Not a Call type for %s' % call
-        cls._calls = tuple(calls)
-        
-    def __init__(self, impl):
+
+    def __init__(self, model, serviceClass, calls):
         '''
         Constructs the API service class based on the provided implementation.
         
-        @param impl: object
-            An instance of the class that implements all the methods required by the
-            service.
+        @param model: class
+            The model that represents the service.
+        @param calls: dictionary
+            The calls dictionary that belong to this service class, the key is the call name.
         '''
-        assert not impl is None, 'Invalid implementation (None)'
+        assert isclass(serviceClass), 'Invalid service class %s' % serviceClass
+        assert isinstance(model, Model), 'Invalid model %s' % model
+        assert isinstance(calls, dict), 'The calls %s need to be a dictionary' % calls
         if __debug__:
-            for call in self.getCalls():
-                assert call.isCallable(impl), 'The provided implementation %s is not suited for %s' % (impl, call)
-        self._impl = impl
-        
-    def getImplementation(self):
-        '''
-        Provides the implementation class assigned to this service instance.
-        
-        @return: object
-            The implementation assigned.
-        '''
-        return self._impl
+            for call in calls.values():
+                assert isinstance(call, Call), 'Not a Call type for %s' % call
+        self.model = model
+        self.serviceClass = serviceClass
+        self.calls = calls
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.serviceClass == other.serviceClass and self.model == other.model \
+                and self.calls == other.calls
+        return False
+    
+    def __str__(self):
+        return '<Service[%s(%s) %s calls]>' % \
+            (simpleName(self.serviceClass), self.model.name, len(self.calls))

@@ -23,6 +23,30 @@ REGEX_ID = re.compile('[1-9][0-9]*')
 
 # --------------------------------------------------------------------
 
+class Message:
+    '''
+    Maps the data required for a message.
+    '''
+    
+    def __init__(self, default, msg, args):
+        '''
+        Provides a wrapping of the message which will be used as a key.
+        
+        @param default: string
+            A default compiled message.
+        @param msg: string
+            The message (that is in English) to be used as a key, this message
+            has to contain as many place holders (ex: $1, $2 ...) as there are 
+            arguments.
+        @param args: list 
+            The arguments to be used instead of the place holders in the message.
+        '''
+        self.default = default
+        self.msg = msg
+        self.args = args
+        
+# --------------------------------------------------------------------
+
 def msg(msg, *args):
     '''
     Provides a wrapping of the message which will be used as a key.
@@ -60,7 +84,7 @@ def msg(msg, *args):
     if index < len(msg):
         compiled.write(msg[index:])
         
-    return compiled.getvalue()
+    return Message(compiled.getvalue(), msg, args)
 
 # --------------------------------------------------------------------
 
