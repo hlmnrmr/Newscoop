@@ -38,6 +38,6 @@ class Code(Protected):
 INTERNAL_ERROR = Code(500, False) # HTTP code 500 Internal Server Error
 UNKNOWN_FORMAT = Code(400, False) # HTTP code 400 Bad Request
 RESOURCE_NOT_FOUND = Code(404, False) # HTTP code 404 Not Found
-NOT_ALLOWED = Code(405, False) # HTTP code 405 Method Not Allowed
+NOT_AVAILABLE = Code(405, False) # HTTP code 405 Method Not Allowed
 
 RESOURCE_FOUND = Code(200, True) # HTTP code 200 OK

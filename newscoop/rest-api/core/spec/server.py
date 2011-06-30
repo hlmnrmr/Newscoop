@@ -38,6 +38,22 @@ class Processor(metaclass=abc.ABCMeta):
         @param chain: ProcessorsChain
             The chain to call the next processors.
         '''
+        
+    def findResponseIn(self, response):
+        '''
+        Finds the Response instance for the provided response object. This class actually tries the response even
+        if the response is encapsulated in within another response type object.
+        
+        @param response: object
+            The response object in which to find the Response.
+        @return: Response|None
+            The Response instance or None if no response could be located. 
+        '''
+        if isinstance(response, Response):
+            return response
+        if isinstance(response, ResponseFormat):
+            return response.response
+        return None
 
 @guard
 class ProcessorsChain:
@@ -336,3 +352,16 @@ class EncoderFactory(metaclass=abc.ABCMeta):
         @return: Encoder
             The new encoder.
         '''
+
+# --------------------------------------------------------------------
+
+class Render:
+    '''
+    Class that handles the rendering of model objects to encoders.
+    '''
+    
+    def render(self, obj, objType, encoder):
+        '''
+        '''
+    
+    

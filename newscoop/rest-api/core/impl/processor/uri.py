@@ -76,7 +76,7 @@ class URIHandler(Processor):
             assert isinstance(response, Response)
             if path.node is None:
                 # we stop the chain processing
-                response.setCode(RESOURCE_NOT_FOUND, _('Cannot find resources for path $1', request.requestPath))
+                response.setCode(RESOURCE_NOT_FOUND, _('Cannot find resources for path'))
                 log.debug('Could not locate resource for %s', request.requestPath)
                 return
             else:

@@ -8,10 +8,11 @@ Created on Jun 29, 2011
 
 Provides the encoding handler.
 '''
+
+from newscoop.core.spec.charset import UTF_8, CharSet
+from newscoop.core.spec.codes import UNKNOWN_FORMAT
 from newscoop.core.spec.server import Processor, ProcessorsChain, ResponseFormat, \
     EncoderFactory, Response
-from newscoop.core.spec.codes import UNKNOWN_FORMAT
-from newscoop.core.spec.charset import UTF_8, CharSet
 import logging
 
 # --------------------------------------------------------------------
