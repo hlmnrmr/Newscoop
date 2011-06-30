@@ -207,9 +207,23 @@ class Admin_StaffController extends Zend_Controller_Action
 
     private function handleForm(Zend_Form $form, Staff $staff)
     {
-        if ($this->getRequest()->isPost() && $form->isValid($_POST)) {
-            $this->repository->save($staff, $form->getValues());
-            $this->_helper->entity->getManager()->flush();
+        if ($this->_request->isPost() && $form->isValid($this->_request->getPost())) {
+            try {
+                $this->repository->save($staff, $form->getValues());
+                $this->_helper->entity->getManager()->flush();
+            // TODO bad design, redirect should not be here.
+            } catch (\PDOException $e) {
+                $this->_helper->flashMessenger(array(
+                	'error',
+                    getGS("Could not save user '$1'. Please make sure it doesn't already exist", $this->_request->getPost('username')))
+                );
+                $this->_helper->redirector->gotoSimple('add', 'staff', 'admin');
+            } catch (\Exception $e) {
+                $this->_helper->flashMessenger(array('error', getGS("Changing user type would prevent you to manage users. Aborted.")));
+                $this->_helper->redirector->gotoSimple('edit', 'staff', 'admin', array(
+                    'user' => $staff->getId(),
+                ));
+            }
 
             // add default widgets for new staff
             if ($this->_getParam('action') == 'add') {

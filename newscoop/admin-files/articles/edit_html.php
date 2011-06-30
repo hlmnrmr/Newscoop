@@ -57,6 +57,13 @@ if (isset($publicationObj) && $articleObj->isPublished()) {
         $previewLinkURL = ShortURL::GetURL($publicationObj->getPublicationId(),
             $articleObj->getLanguageId(), null, null, $articleObj->getArticleNumber());
         $doPreviewLink = 'live';
+
+        $seoFields = $publicationObj->getSeo();
+        $articleEndLink = $articleObj->getSEOURLEnd($seoFields, $articleObj->getLanguageId());
+        if(strlen($articleEndLink) > 0) {
+            $previewLinkURL .= $articleEndLink;
+        }
+
         if (PEAR::isError($previewLinkURL)) {
             $doLiveLink = '';
         }
@@ -82,7 +89,8 @@ if (isset($publicationObj) && $articleObj->isPublished()) {
   <?php } else { ?>
     <span class="article-title"><?php print wordwrap(htmlspecialchars($articleObj->getTitle()), 80, '<br />'); ?></span>
   <?php } ?>
-    <span class="comments"><?php p(count($comments)); ?></span>
+
+    <span class="comments"><?php p(count(isset($comments) ? $comments : array())); ?></span>
     <div class="save-button-bar">
       <input type="submit" class="save-button" value="<?php putGS('Save All'); ?>" id="save" name="save" <?php if (!$inEditMode) { ?> disabled style="opacity: 0.3"<?php } ?> />
       <input type="submit" class="save-button" value="<?php $inEditMode ? putGS('Save and Close') : putGS('Close'); ?>" id="save_and_close" name="save_and_close" />
@@ -122,6 +130,10 @@ if (isset($publicationObj) && $articleObj->isPublished()) {
                 'f_article_title'
                 );
             foreach ($hiddens as $name) {
+                if (!isset($$name)) {
+                    $$name = '';
+                }
+
                 echo '<input type="hidden" name="', $name;
                 echo '" value="', $$name, '" />', "\n";
             }
@@ -225,6 +237,11 @@ if (isset($publicationObj) && $articleObj->isPublished()) {
                 // Transform Campsite-specific tags into editor-friendly tags.
                 $unparsedText = $articleData->getProperty($dbColumn->getName());
                 $text = parseTextBody($unparsedText, $f_article_number);
+                $editorSize = str_replace('editor_size=', '', $dbColumn->m_data['field_type_param']);
+                if (!is_numeric($editorSize)) {
+					require_once($GLOBALS['g_campsiteDir'].'/classes/ArticleTypeField.php');
+					$editorSize = ArticleTypeField::BODY_ROWS_MEDIUM;
+				}
         ?>
           <li>
             <label><?php echo htmlspecialchars($dbColumn->getDisplayName()); ?></label>
@@ -236,7 +253,7 @@ if (isset($publicationObj) && $articleObj->isPublished()) {
             ?>
               <textarea name="<?php print($textAreaId); ?>"
                 id="<?php print($textAreaId); ?>" class="tinymce"
-                rows="20" cols="70"><?php print $text; ?></textarea>
+                style="height: <?php print($editorSize); ?>px;" cols="70"><?php print $text; ?></textarea>
             <?php } else { ?>
               <?php p($text); ?>
             <?php } ?>

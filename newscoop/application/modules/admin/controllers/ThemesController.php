@@ -4,6 +4,7 @@
  * @copyright 2011 Sourcefabric o.p.s.
  * @license http://www.gnu.org/licenses/gpl-3.0.txt
  */
+use Newscoop\Service\Exception\RemoveThemeException;
 use Newscoop\Entity\OutputSettings;
 use Newscoop\Service\IArticleTypeService,
     Newscoop\Entity\Repository\ArticleTypeRepository,
@@ -262,7 +263,7 @@ class Admin_ThemesController extends Zend_Controller_Action
                 ->getElement( 'submit-button' )->clearDecorators()->addDecorator( 'ViewHelper' )->setAttrib( 'style', 'display:none' );
             $this->view->uploadForm = $uploadForm;
 
-            $this->view->headScript()->appendFile( $this->view->baseUrl( "/js/jquery/jquery.tmpl.js" ) );
+            $this->view->headScript()->appendFile( $this->view->baseUrl( "/js/jquery/doT.js" ) );
             $this->view->headLink( array
             (
             	'type'  =>'text/css',
@@ -533,7 +534,8 @@ class Admin_ThemesController extends Zend_Controller_Action
         }
 
         //print '===create===';
-        //var_dump( $createArticleTypes );
+        //var_dump( $createArticleTypes['Blog'] );
+        //die;
 
         $artServ = $this->getArticleTypeService();
         $themeArticleTypes = (array) $this->getThemeService()->getArticleTypes( $theme );
@@ -557,7 +559,7 @@ class Admin_ThemesController extends Zend_Controller_Action
         $artServ->createMany( $createArticleTypes );
 
         //print '===update===';
-        //var_dump( $updateArticleTypes );
+        //var_dump( $createArticleTypes );
         //exit;
 
         $this->view->response = $thmServ->assignArticleTypes( $updateArticleTypes, $theme );
@@ -572,7 +574,22 @@ class Admin_ThemesController extends Zend_Controller_Action
     public function unassignAction()
     {
         if( ( $themeId = $this->_getParam( 'id', null ) ) ) {
-            $this->view->response = $this->getThemeService()->removeTheme($themeId);
+            try
+            {
+                $this->getThemeService()->removeTheme($themeId);
+                $this->view->status = true;
+                $this->view->response = getGS( "Unassign successful" );
+            }
+            catch( RemoveThemeException $e )
+            {
+                $this->view->status = false;
+                $this->view->response = getGS( "Cannot remove theme, it's most probably used by an issue" );
+            }
+            catch( Exception $e )
+            {
+                $this->view->status = false;
+                $this->view->response = getGS( "Failed unassigning theme" );
+            }
         }
     }
 
@@ -634,24 +651,6 @@ class Admin_ThemesController extends Zend_Controller_Action
             $this->view->exception = array( "code" => $e->getCode(), "message" => getGS( 'Something broke' ) );
         }
 
-    }
-
-    public function testAction()
-    {
-        $theme = $this->getThemeService()->findById( $this->_request->getParam( 'id' ) );
-        //$this->getThemeFileService();
-        var_dump( $this->getThemeService()->getArticleTypes($theme ) );die;
-        $artServ = $this->getArticleTypeService();
-        var_dump( $artServ->findTypeByName( 'news' ) );
-        /*$k=1;
-        foreach( $artServ->findAllTypes() as $at )
-        {
-            echo $at->getName(),($k++)," <br />";
-            foreach( $artServ->findFields( $at ) as $af )
-
-              echo $af->getName(), " type: ", $at->getName(), " ~= type from field: ", $af->getType()->getName(), "<br />";
-        } */
-        die;
     }
 
     public function installAction()

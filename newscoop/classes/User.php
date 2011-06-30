@@ -3,8 +3,6 @@
  * @package Campsite
  */
 
-use Newscoop\Entity\User\Subscriber;
-
 /**
  * Includes
  */
@@ -105,28 +103,38 @@ class User extends DatabaseObject {
             $p_values['time_created'] = strftime("%Y-%m-%d %H:%M:%S", time());
         }
 
+        $map = array(
+            'UName' => 'username',
+            'Name'  => 'name',
+            'EMail' => 'email',
+            'passwd' => 'password',
+        );
+
         foreach ($p_values as $key => $value) {
-            if ($key == 'UName') {
-                $key = 'handle';
+            if (isset($map[$key])) {
+                $values[$map[$key]] = $value;
+            } else {
+                $values[$key] = $value;
             }
-            $values[$key] = $value;
         }
 
         $values['perm_type'] = 1;
+        $class = $values['Reader'] == 'N' ? 'Newscoop\Entity\User\Staff' : 'Newscoop\Entity\User\Subscriber';
 
         try {
-            $subscriber = new Subscriber;
-            $repository = $controller->getHelper('entity')->getRepository($subscriber);
-            $repository->save($subscriber, $values);
+            $user = new $class;
+            $repository = $controller->getHelper('entity')->getRepository($class);
+            $repository->save($user, $values);
             $controller->getHelper('entity')->flushManager();
 
             if (function_exists("camp_load_translation_strings")) {
                 camp_load_translation_strings("api");
             }
-            $logtext = getGS('User account "$1" ($2) created', $subscriber->getName(), $subscriber->getUsername());
+
+            $logtext = getGS('User account "$1" ($2) created', $user->getName(), $user->getUsername());
             Log::Message($logtext, null, 51);
-            return true;
-        } catch (Exception $e) {
+            return $user->getId();
+        } catch (\Exception $e) {
             return false;
         }
     } // fn create
@@ -520,7 +528,7 @@ class User extends DatabaseObject {
             $pluginConfig = true;
             foreach (CampPlugin::GetPluginsInfo(true) as $info) {
             	self::$m_defaultConfig += $info['userDefaultConfig'];
-            }     
+            }
         }
         return self::$m_defaultConfig;
     } // fn GetDefaultConfig
@@ -671,6 +679,16 @@ class User extends DatabaseObject {
         return ($p_password == $this->m_data['Password']);
     } // fn isValidPassword
 
+    const SALT_LENGTH = 12;
+	private function _hashPass($p_pass, $p_salt = null)
+	{
+		if( is_null($p_salt) ) {
+        	$salt = substr(md5(uniqid(openssl_random_pseudo_bytes(self::SALT_LENGTH), true)), 0, self::SALT_LENGTH);
+		} else {
+			$salt = substr($salt, 0, self::SALT_LENGTH);
+		}
+    	return $salt.sha1($salt.$p_pass);
+	}
 
     /**
      * @param string $p_password

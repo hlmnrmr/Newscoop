@@ -5,8 +5,6 @@ var fullDate = '<?php p(date("Y-m-d H:i:s", $lastModified)); ?>';
 document.getElementById('info-text').innerHTML = '<?php putGS('Saved'); ?> ' + ' ' + dateTime;
 document.getElementById('date-last-modified').innerHTML = '<?php putGS('Last modified'); ?> ' + ': ' + fullDate;
 
-var ajax_forms = 0; // forms saving by ajax
-
 $(function() {
 
 // make breadcrumbs + save buttons sticky
@@ -68,10 +66,12 @@ var toggleComments = function() {
     $('input:radio[name^="f_comment"]:checked').each(function() {
         var form = $('#comments-form');
         var list = $('#comments-list');
+        var commentReply = $('#comment-moderate dd.buttons');
         switch ($(this).val()) {
             case 'enabled':
                 form.show();
                 list.show();
+                commentReply.show();
                 break;
 
             case 'disabled':
@@ -82,6 +82,7 @@ var toggleComments = function() {
             case 'locked':
                 form.hide();
                 list.show();
+                commentReply.hide();
                 break;
         }
     });
@@ -100,19 +101,17 @@ $('form#article-main').submit(function() {
     } else {
     	 // ping for connection
         callServer('ping', [], function(json) {
-            ajax_forms++;
             $.ajax({
                 type: 'POST',
                 url: '<?php echo $Campsite['WEBSITE_URL']; ?>/admin/articles/post.php',
                 data: form.serialize(),
                 success: function(data, status, p) {
                     flashMessage('<?php putGS('Article saved.'); ?>');
-                    ajax_forms--;
                     toggleComments();
                 },
                 error: function (rq, status, error) {
                     if (status == 0 || status == -1) {
-                        flashMessage('<?php putGS('Unable to reach Campsite. Please check your internet connection.'); ?>', 'error');
+                        flashMessage('<?php putGS('Unable to reach Newscoop. Please check your internet connection.'); ?>', 'error');
                     }
                 }
             });
@@ -162,18 +161,11 @@ $('.save-button-bar input').click(function() {
 
     if ($(this).attr('id') == 'save_and_close') {
         unlockArticle();
-
-        if (ajax_forms == 0) { // nothing to save
+        $(this).ajaxStop(function() {
             close(1500);
-            return false;
-        }
-
-        $('body').ajaxSuccess(function(event, xhr, options) {
-            if (ajax_forms == 0) { // all saved, wait for messages to be displayed
-                close(1500);
-            }
         });
     }
+
     return false;
 });
 
@@ -254,15 +246,44 @@ if (message) {
 }); // /document.ready
 
 /**
+ * Check for unsaved changes in tinymce editors
+ * @return bool
+ */
+function editorsChanged()
+{
+    var editor_rank = 0;
+    while (true) {
+        var editor_obj = tinyMCE.get(editor_rank);
+        if (!editor_obj) {
+            break;
+        }
+        if (editor_obj.isDirty()) {
+            return true;
+        }
+        editor_rank += 1;
+    }
+
+    return false;
+};
+
+/**
  * Check for unsaved changes in main/boxes forms
  * @return bool
  */
 function checkChanged()
 {
-    if ($('form.changed').size() == 0) {
+    if( $("#f_action_workflow").val() == 'N' ) {
+        <?php
+            if ( count($articleEvents) ) {
+                ?>
+                return confirm('<?php putGS('Please be aware that all scheduled publishing events for this article will be deleted when you set this article to "New" state. Please confirm the state change.'); ?>');
+                <?php
+            }
+        ?>
+    }
+    if ((!editorsChanged()) && ($('form.changed').size() == 0)) {
         return true; // continue
     }
-
     return confirm('<?php putGS('Your work has not been saved. Do you want to continue and lose your changes?'); ?>');
 }
 </script>

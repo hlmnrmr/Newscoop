@@ -14,6 +14,7 @@ use Newscoop\Service\ISyncResourceService;
 use Newscoop\Entity\Output\OutputSettingsTheme;
 use Newscoop\Entity\Output\OutputSettingsIssue;
 use Newscoop\Service\Exception\DuplicateNameException;
+use Newscoop\Service\Exception\RemoveThemeException;
 use Newscoop\Version;
 use Newscoop\Service\Implementation\Exception\FailedException;
 use Newscoop\Service\Error\ThemeErrors;
@@ -352,7 +353,7 @@ class ThemeManagementServiceLocal extends ThemeServiceLocalFileSystem implements
             $this->cacheThemeConfigs = NULL;
             return true;
         }
-        return false;
+        throw new RemoveThemeException();
     }
 
     function assignTheme(Theme $theme, Publication $publication)
@@ -396,7 +397,7 @@ class ThemeManagementServiceLocal extends ThemeServiceLocalFileSystem implements
                 $qb->setParameter('themePath', $pathRsc);
                 $qb->setParameter('output', $outSet->getOutput());
                 $result = $qb->getQuery()->getResult();
-                
+
                 if(count($result) > 0){
                     $outTh = $result[0];
                 } else {
@@ -521,13 +522,7 @@ class ThemeManagementServiceLocal extends ThemeServiceLocalFileSystem implements
         Validation::notEmpty($articleTypes, 'articleTypes');
         Validation::notEmpty($theme, 'theme');
 
-        $xml = $this->loadXML( ( $xmlFileName = $this->toFullPath($theme, $this->themeConfigFileName ) ) );
-        if($xml == NULL){
-            throw new \Exception("Unknown theme path '.$theme->gePath().' to assign to.");
-        }
-
         $artServ = $this->getArticleTypeService();
-
         $artCache = array();
         /**
          * function purpose: not to make so many calls to db
@@ -547,7 +542,13 @@ class ThemeManagementServiceLocal extends ThemeServiceLocalFileSystem implements
             return $artCache[ $parentType.$fieldName ];
         };
 
+        $xml = $this->loadXML( ( $xmlFileName = $this->toFullPath($theme, $this->themeConfigFileName ) ) );
+        if( $xml == NULL ) {
+            throw new \Exception( "Unknown theme path '.$theme->gePath().' to assign to." );
+        }
 
+        $updatedTypes = array(); // used to check duplicate names for types
+        $safeTypeCounter = null;
         // parse the mapping array
         foreach( $articleTypes as $typeName => $type )
         {
@@ -555,15 +556,29 @@ class ThemeManagementServiceLocal extends ThemeServiceLocalFileSystem implements
 
             $fieldNodes = $xml->xpath("$articleXPath/*");
 
+            $updatedFields = array(); // used to check duplicate names for fields and such
+
+            $safeFieldCounter = null;
+
             if( count($fieldNodes) )
             {
                 foreach( $fieldNodes as $fieldNode )
                 {
-                    if( !( $updateField = $type['fields'][ (string) $fieldNode[self::ATTR_ARTICLE_TYPE_FILED_NAME] ] )
-                    || $updateField['ignore'] == true )
+                    if(
+                        ( !isset( $type['fields'][ (string) $fieldNode[self::ATTR_ARTICLE_TYPE_FILED_NAME] ] )
+                            || !( $updateField = $type['fields'][ (string) $fieldNode[self::ATTR_ARTICLE_TYPE_FILED_NAME] ] ) )
+                        || $updateField['ignore'] == true
+                    )
                     continue;
 
-                    $fieldNode[self::ATTR_ARTICLE_TYPE_FILED_NAME] = $updateField['name'];
+                    $updateFieldName = $updateField['name'];
+                    // checking for duplicates
+                    if( isset( $updatedFields[ $updateFieldName ] ) ) {
+                        $updateFieldName = $updateField['name'].(++$safeFieldCounter);
+                    }
+                    $fieldNode[self::ATTR_ARTICLE_TYPE_FILED_NAME] = $updateFieldName;
+                    $updatedFields[$updateFieldName] = true;
+
 
                     $theField = $getFieldByName( $updateField['parentType'], $updateField['name'] );
                     /* @var $theField ArticleTypeField */
@@ -572,7 +587,7 @@ class ThemeManagementServiceLocal extends ThemeServiceLocalFileSystem implements
                         $fieldNode[self::ATTR_ARTICLE_TYPE_FILED_LENGTH] = $theField->getLength();
                         $fieldNode[self::ATTR_ARTICLE_TYPE_FILED_TYPE] = $theField->getType();
                     }
-                }
+                } // end foreach fieldNodes
             }
 
             if( $type['ignore'] ) {
@@ -584,8 +599,16 @@ class ThemeManagementServiceLocal extends ThemeServiceLocalFileSystem implements
                 continue;
             }
             /* @var $typeNode SimpleXMLElement */
-            $typeNode[self::ATTR_ARTICLE_TYPE_NAME] = $type['name'];
-        }
+
+            $updateTypeName = $type['name'];
+            // checking for duplicates
+            if( isset( $updatedTypes[ $updateTypeName ] ) ) {
+                $updateTypeName = $type['name'].(++$safeTypeCounter);
+            }
+            $typeNode[self::ATTR_ARTICLE_TYPE_NAME] = $updateTypeName;
+            $updatedTypes[$updateTypeName] = true;
+
+        } // end foreach articleTypes
 
         return $xml->asXML( $xmlFileName );
     }
