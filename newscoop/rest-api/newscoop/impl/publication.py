@@ -19,18 +19,23 @@ class PublicationServiceTest(IPublicationService):
     '''
     
     def __init__(self):
+        super().__init__(self)
         self.publications = {}
-        for i in range(1, 100):
+        for i in range(1, 10):
             pub = Publication()
-            pub.id = i
-            pub.name = 'Publication ' + str(i)
+            pub.Id = i
+            pub.Name = 'Publication ' + str(i)
             self.publications[i] = pub
 
     def byId(self, id):
         return self.publications[id]
 
-    def all(self, q=None):
-        return self.publications.keys()
+    def all(self, offset=None, limit=None, q=None):
+        k = 0
+        for id in self.publications.keys():
+            if (offset is None or k >= offset) and (limit is None or k - offset < limit):
+                yield id
+            k += 1
 
     # ---------------------------------------------
  

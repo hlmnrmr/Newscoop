@@ -11,8 +11,7 @@ General specifications for the entities API.
 
 from ally.core.api.configure import APIModel as model, APIService as service, APIQuery as query, \
     APICall as call
-from ally.core.api.type import List, Id
-from ally.core.api.criteria import AsPaged
+from ally.core.api.type import Id, Iter
 
 # --------------------------------------------------------------------
 
@@ -21,7 +20,7 @@ class Entity:
     '''
     Provides the basic container for an entity that has a primary key.
     '''
-    id = Id
+    Id = Id
 
 # --------------------------------------------------------------------
 
@@ -30,7 +29,6 @@ class QEntity:
     '''
     Provides the basic query for an entity.
     '''
-    index = AsPaged
     
 # --------------------------------------------------------------------
 
@@ -41,7 +39,7 @@ class IEntityFindService:
     Provides the basic entity service. This means locate by id.
     '''
     
-    @call(Entity, Entity.id)
+    @call(Entity, Entity.Id)
     def byId(self, id):
         '''
         Provides the theme based on the theme id.
@@ -70,7 +68,7 @@ class IEntityCRUDService:
         @return: True if the update is successful, false otherwise.
         '''
         
-    @call(bool, Entity.id)
+    @call(bool, Entity.Id)
     def delete(self, id):
         '''
         Delete the entity for the provided id.
@@ -82,12 +80,17 @@ class IEntityCRUDService:
 @service(Entity)
 class IEntityQueryService(IEntityFindService):
         
-    @call(List(Entity.id), QEntity)
-    def all(self, q = None):
+    @call(Iter(Entity.Id), int, int, QEntity)
+    def all(self, offset=None, limit=None, q=None):
         '''
         Provides the entities searched by the provided query.
         
-        @param q: The query to search by.
+        @param offset: integer
+            The offset to retrieve the entities from.
+        @param limit: integer
+            The limit of entities to retrieve.
+        @param q: QEntity
+            The query to search by.
         '''
         
 # The Entity model will be replaced by the specific model when the API will be inherited.

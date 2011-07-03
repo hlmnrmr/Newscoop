@@ -13,8 +13,9 @@ from ally.core.impl.node import NodeModel
 from ally.core.internationalization import msg as _
 from ally.core.spec.codes import RESOURCE_NOT_FOUND, RESOURCE_FOUND
 from ally.core.spec.resources import Converter, Path, ResourcesManager
-from ally.core.spec.server import Request, Response, Processor, \
-    ProcessorsChain, RequestResource, ResponseFormat, EncoderPath
+from ally.core.spec.server import Request, Response, Processor, ProcessorsChain, \
+    RequestResource, ResponseFormat, EncoderPath
+from ally.core.util import injected
 import logging
 
 # --------------------------------------------------------------------
@@ -23,35 +24,31 @@ log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------
 
+@injected
 class URIHandler(Processor):
     '''
     Implementation for a processor that provides the URI conversion to a resource path.
     '''
     
-    def __init__(self, resourcesManager, converter, domain='', separatorPath='/', separatorExtension='.'):
-        '''
-        
-        @param resourcesManager: ResourcesManager
-            The resources manager that will provide the path to the resource node.
-        @param converter: Converter
-            The converter to be used in handling the path.
-        @param domain: string
-            The path domain something like "http://localhost/".
-        @param separatorPath: string
-            The path separator, something like "/".
-        @param separatorExtension: string
-            The extension separator, something like ".".
-        '''
-        assert isinstance(resourcesManager, ResourcesManager), 'Invalid resources manager %s' % resourcesManager
-        assert isinstance(converter, Converter), 'Invalid converter %s' % converter
-        assert isinstance(domain, str), 'Invalid domain %s' % domain
-        assert isinstance(separatorPath, str), 'Invalid path separator %s' % separatorPath
-        assert isinstance(separatorExtension, str), 'Invalid extension separator %s' % separatorExtension
-        self._resourcesManager = resourcesManager
-        self.converter = converter
-        self.domain = domain
-        self.separatorPath = separatorPath
-        self.separatorExtension = separatorExtension
+    resourcesManager = ResourcesManager
+    # The resources manager that will provide the path to the resource node.
+    converter = Converter
+    # The converter to be used in handling the path.
+    domain = str
+    # The path domain something like "http://localhost/".
+    separatorPath = '/'
+    # The path separator.
+    separatorExtension = '.'
+    # The extension separator.
+    separatorQuery = '?'
+    # The query parameters separator.
+    separatorParam = '&'
+    # The separator for parameters inside a query.
+    separatorValue = '='
+    # The separator used in parameter to separate name from value.
+    separatorList = ','
+    # The separator used in defining a list of values.
+
 
     def process(self, request, response, chain):
         '''
@@ -62,6 +59,12 @@ class URIHandler(Processor):
             requestPath = request.requestPath
             if len(self.domain) > 0 and requestPath.startswith(self.domain):
                 requestPath = requestPath[len(self.domain):]
+            i = requestPath.find(self.separatorQuery)
+            if i >= 0:
+                query = requestPath[i + 1:].strip()
+                requestPath = requestPath[:i]
+            else:
+                query = None
             paths = requestPath.split(self.separatorPath)
             i = paths[-1].rfind(self.separatorExtension)
             if i < 0:
@@ -70,21 +73,31 @@ class URIHandler(Processor):
                 extension = paths[-1][i + 1:].lower()
                 paths[-1] = paths[-1][0:i]
             paths = [p for p in paths if len(p) != 0]
-            path = self._resourcesManager.findResourcePath(self.converter, paths)
+            params = []
+            if query is not None and len(query) > 0:
+                for param in (param.split(self.separatorValue) for param in query.split(self.separatorParam)):
+                    if len(param) > 1:
+                        listValue = param[1].split(self.separatorList)
+                        for value in listValue:
+                            params.append((param[0], value))
+                    else:
+                        params.append((param[0], None))
+            path = self.resourcesManager.findResourcePath(self.converter, paths)
             assert isinstance(path, Path)
             assert isinstance(response, Response)
             if path.node is None:
                 # we stop the chain processing
                 response.setCode(RESOURCE_NOT_FOUND, _('Cannot find resources for path'))
                 log.debug('Could not locate resource for %s', request.requestPath)
-                return
             else:
                 response.setCode(RESOURCE_FOUND)
-                request = RequestResource(request, path)
+                requestResource = RequestResource(request, path, params)
                 response = ResponseFormat(response, URIEncoderPath(self, extension), extension)
-                log.debug('Successfully found resource %s for path %s with extension %s', \
-                          path, request.requestPath, extension)
-            chain.process(request, response)
+                log.debug('Successfully found resource for path %s with extension %s', \
+                          request.requestPath, extension)
+                chain.process(requestResource, response)
+            return
+        chain.process(request, response)
             
 # --------------------------------------------------------------------
 

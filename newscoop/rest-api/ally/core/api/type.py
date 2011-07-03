@@ -8,7 +8,7 @@ Created on Jun 8, 2011
 
 Provides the types used for APIs.
 '''
-from _abcoll import Iterable, Sized
+from _abcoll import Iterable, Sized, Iterator
 from inspect import isclass
 from ally.core.util import Uninstantiable, simpleName, Singletone, guard
 import abc
@@ -38,6 +38,15 @@ class Type(metaclass=abc.ABCMeta):
         self.isPrimitive = isPrimitive
 
     @abc.abstractmethod
+    def forClass(self):
+        '''
+        Provides the basic class representation of the type.
+        
+        @return: class|None
+            The class represented by the type, None if not available.
+        '''
+
+    @abc.abstractmethod
     def isValid(self, obj):
         '''
         Checks if the provided object instance is represented by this API type.
@@ -60,22 +69,28 @@ class TypeClass(Type):
             The class to be checked if valid.
         '''
         assert isclass(forClass), 'Invalid class %s.' % forClass
-        self.forClass = forClass
+        self._forClass = forClass
         super().__init__(isPrimitive)
 
+    def forClass(self):
+        '''
+        @see: Type.forClass
+        '''
+        return self._forClass
+        
     def isValid(self, obj):
         '''
         @see: Type.isValid
         '''
-        return isinstance(obj, self.forClass)
+        return isinstance(obj, self._forClass)
     
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            return self.forClass == other.forClass
+            return self._forClass == other._forClass
         return False
     
     def __str__(self):
-        return simpleName(self.forClass)
+        return simpleName(self._forClass)
 
 # --------------------------------------------------------------------
 
@@ -89,6 +104,12 @@ class TypeNone(Singletone, Type):
         '''
         super().__init__(True)
 
+    def forClass(self):
+        '''
+        @see: Type.forClass
+        '''
+        return None
+    
     def isValid(self, obj):
         '''
         @see: Type.isValid
@@ -166,23 +187,62 @@ class Id(Uninstantiable):
     api_type = TypeId(int)
 
 # --------------------------------------------------------------------
- 
-class List(Type):
+
+class Iter(Type):
+    '''
+    Maps an iterator of values.
+    You need also to specify in the constructor what elements this iterator will contain.
+    Since the values in an iterator can only be retrieved once than this type when validating the iterator it will
+    not be able to validate also the elements.
+    '''
+    
+    def __init__(self, type):
+        '''
+        Constructs the iterator type for the provided type.
+        @see: Type.__init__
+        
+        @param type: Type|class
+            The type of the iterator.
+        '''
+        assert not isinstance(type, Iter), 'Invalid item type %s because is another iterable' % type
+        self.itemType = typeFor(type)
+        super().__init__(False)
+    
+    def forClass(self):
+        '''
+        @see: Type.forClass
+        '''
+        return self.itemType.forClass()
+
+    def isValid(self, list):
+        '''
+        @see: Type.isValid
+        '''
+        if isinstance(list, Iterator):
+            return True
+        return False
+    
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.itemType == other.itemType
+        return False
+    
+    def __str__(self):
+        return '%s(%s)' % (simpleName(self), self.itemType)
+    
+class List(Iter):
     '''
     Maps lists of values.
     You need also to specify in the constructor what elements this list will contain.
+    Unlike the iterator type the list type also validates the contained elements.
     '''
     
     def __init__(self, type):
         '''
         Constructs the list type for the provided type.
-        @see: Type.__init__
-        
-        @param type: Type|class
-            The type of the list.
+        @see: Iter.__init__
         '''
-        self.itemType = typeFor(type)
-        super().__init__(False)
+        super().__init__(type)
         
 
     def isValid(self, list):
@@ -195,14 +255,6 @@ class List(Type):
                     return False
             return True
         return False
-    
-    def __eq__(self, other):
-        if isinstance(other, self.__class__):
-            return self.itemType == other.itemType
-        return False
-    
-    def __str__(self):
-        return 'List(%s)' % self.itemType
 
 # --------------------------------------------------------------------
 
@@ -268,6 +320,12 @@ class TypeProperty(Type):
         self.property = property
         super().__init__(property.type.isPrimitive)
 
+    def forClass(self):
+        '''
+        @see: Type.forClass
+        '''
+        return self.property.type.forClass()
+    
     def isValid(self, obj):
         '''
         Checks if the provided object instance is represented by this API type.
@@ -284,6 +342,36 @@ class TypeProperty(Type):
 
     def __str__(self):
         return '%s.%s' % (self.model.name, self.property.name)
+
+# --------------------------------------------------------------------
+
+@guard
+class Input:
+    '''
+    Provides an input entry for a call, this is used for keeping the name and also the type of a call parameter.
+    '''
+    
+    def __init__(self, name, type):
+        '''
+        Construct the input.
+        
+        @param name: string
+            The name of the input.
+        @param type: Type
+            The type of the input.
+        '''
+        assert isinstance(name, str), 'Invalid name %s' % name
+        assert isinstance(type, Type), 'Invalid type %s' % type
+        self.name = name
+        self.type = type
+        
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.name == other.name and self.type == other.type
+        return False
+
+    def __str__(self):
+        return '%s=%s' % (self.name, self.type)
 
 # --------------------------------------------------------------------
 

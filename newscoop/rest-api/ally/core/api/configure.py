@@ -15,7 +15,7 @@ from inspect import getargspec, isfunction, isclass
 from ally.core.api.operator import Call, Service, Criteria, Query, Model, \
     Property, CriteriaEntry, Properties
 from ally.core.api.type import TypeProperty, typeFor, TypeModel, List, Type, \
-    TypeQuery
+    TypeQuery, Iter, Input
 from ally.core.util import fullyQName, guard
 import logging
 
@@ -199,6 +199,8 @@ class APIEntry():
         criteria = crtEntry.get(query)
         if criteria is None:
             criteria = self.criteriaClass()
+            criteria.query = query
+            criteria.entryName = crtEntry.name
             crtEntry.set(query, criteria)
         return criteria
     
@@ -274,7 +276,6 @@ class APIQuery(Callable):
         query = queryFor(queryClass)
         if query is None:
             # this is not an extended query
-            assert not len(entries) == 0, 'There are no API entries on query class %s' % queryClass
             query = Query(queryClass, entries)
         else:
             assert isinstance(query, Query)
@@ -295,7 +296,9 @@ class APICriteria(Callable):
     Used for decorating classes that are API criteria's.
     Attention the declared criteria will have the __new__ redeclared in order to provide the criteria descriptor
     instead of the actual criteria, so do not create criteria instance only when is in the purpose of creating
-    a query. 
+    a query.
+    Each decorated criteria instance will contain the fields 'query' containing the query that owns the criteria
+    and 'entryName' the name under which the criteria has been declared.
     
     ex:
         @APICriteria()
@@ -393,16 +396,16 @@ class APICall(Callable):
                 The function that performs the service.
         '''
         assert isfunction(function), 'Invalid function %s' % function
-        if __debug__:
-            fnArgs = getargspec(function)
-            assert 'self' == fnArgs.args[0], 'The call needs to be tagged in a class definition'
-            assert len(fnArgs.args) == 1 + len(self.inputTypes), \
-            'The functions parameters are not equal with the provided input types'
-            assert fnArgs.varargs is None, 'No variable arguments are allowed'
-            assert fnArgs.keywords is None, 'No keywords arguments are allowed'
+        fnArgs = getargspec(function)
+        assert 'self' == fnArgs.args[0], 'The call needs to be tagged in a class definition'
+        assert len(fnArgs.args) == 1 + len(self.inputTypes), \
+        'The functions parameters are not equal with the provided input types'
+        assert fnArgs.varargs is None, 'No variable arguments are allowed'
+        assert fnArgs.keywords is None, 'No keywords arguments are allowed'
         if fnArgs.defaults is not None:
             self.mandatoryCount -= len(fnArgs.defaults)
         self.name = function.__name__
+        self.inputs = [Input(name, typ) for name, typ in zip(fnArgs.args[1:], self.inputTypes)]
         @wraps(function)
         def callFunction(srv, *args):
             '''
@@ -604,7 +607,7 @@ def _processAPICalls(serviceClass):
             try:
                 apiCall = func.APICall
                 assert isinstance(apiCall, APICall), 'Expected API call %' % apiCall
-                call = Call(name, apiCall.outputType, apiCall.inputTypes, apiCall.mandatoryCount)
+                call = Call(name, apiCall.outputType, apiCall.inputs, apiCall.mandatoryCount)
                 calls[name] = call
                 log.info('Found call %s', call)
             except AttributeError:
@@ -637,16 +640,17 @@ def _processCallGeneric(call, superModel, newModel):
         updated = True
     else:
         outputType = call.outputType
-    inputTypes = []
-    for inputType in call.inputTypes:
-        genericType = _processTypeGeneric(inputType, superModel, newModel)
+    inputs = []
+    for input in call.inputs:
+        assert isinstance(input, Input)
+        genericType = _processTypeGeneric(input.type, superModel, newModel)
         if genericType is not None:
-            inputTypes.append(genericType)
+            inputs.append(Input(input.name, genericType))
             updated = True
         else:
-            inputTypes.append(inputType)
+            inputs.append(input)
     if updated:
-        newCall = Call(call.name, outputType, inputTypes, call.mandatoryCount)
+        newCall = Call(call.name, outputType, inputs, call.mandatoryCount)
         log.info('Generic call transformation from %s to %s' % (call, newCall))
         call = newCall
     return call
@@ -684,6 +688,9 @@ def _processTypeGeneric(typ, superModel, newModel):
     elif isinstance(typ, List):
         assert isinstance(typ, List)
         newType = List(_processTypeGeneric(typ.itemType, superModel, newModel))
+    elif isinstance(typ, Iter):
+        assert isinstance(typ, Iter)
+        newType = Iter(_processTypeGeneric(typ.itemType, superModel, newModel))
     return newType
 
 # --------------------------------------------------------------------
@@ -701,8 +708,6 @@ def propertiesFor(obj, properties=None):
         If the properties has been associate then the return will be none, if the properties is being extracted it 
         can return either the Properties or None if is not found.
     '''
-    if not isclass(obj):
-        obj = obj.__class__
     if properties is None:
         return getattr(obj, 'api_properties', None)
     assert isinstance(properties, Properties), 'Invalid properties %s' % properties
@@ -722,8 +727,6 @@ def queryFor(obj, query=None):
         If the query has been associate then the return will be none, if the query is being extracted it can
         return either the Query or None if is not found.
     '''
-    if not isclass(obj):
-        obj = obj.__class__
     if query is None:
         return getattr(obj, 'api_query', None)
     assert isinstance(query, Query), 'Invalid query %s' % query
@@ -743,8 +746,6 @@ def serviceFor(obj, service=None):
         If the service has been associate then the return will be none, if the service is being extracted it can
         return either the Service or None if is not found.
     '''
-    if not isclass(obj):
-        obj = obj.__class__
     if service is None:
         return getattr(obj, 'api_service', None)
     assert isinstance(service, Service), 'Invalid service %s' % service

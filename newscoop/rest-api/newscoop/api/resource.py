@@ -41,7 +41,7 @@ class IResourceService(IEntityService):
     Provides the resource service.
     '''
 
-    @call(Content, Resource.id)
+    @call(Content, Resource.Id)
     def content(self, id):
         '''
         Provides the content stream for the resource.

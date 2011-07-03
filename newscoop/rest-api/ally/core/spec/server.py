@@ -15,7 +15,7 @@ from ally.core.spec.charset import CharSet
 from ally.core.spec.codes import Code
 from ally.core.spec.content_type import ContentType
 from ally.core.spec.resources import Path
-from ally.core.util import guard
+from ally.core.util import guard, injected
 import abc
 from ally.core.spec.presenting import EncoderPath
 
@@ -92,7 +92,35 @@ class ProcessorsChain:
             assert isinstance(proc, Processor)
             proc.process(request, response, self)
 
+@injected
+class Processors:
+    '''
+    Container for processor's, also provides chains for their execution.
+    '''
+    
+    processors = list
+    # The list of processors that compose this container.
+    
+    def __init__(self):
+        if __debug__:
+            for processor in self.processors:
+                assert isinstance(processor, Processor), 'Invalid processor %s' % processor
+         
+    def newChain(self):
+        '''
+        Constructs a new processors chain.
+        
+        @return: ProcessorsChain
+            The chain of processors.
+        '''
+        return ProcessorsChain(self.processors)
+        
 # --------------------------------------------------------------------
+# The available request methods.
+GET = 1
+INSERT = 2
+UPDATE = 4
+DELETE = 8
 
 @guard
 class Request:
@@ -100,26 +128,20 @@ class Request:
     Maps a request object based on a request path and action.
     '''
     
-    def __init__(self, requestPath):
+    def __init__(self, method, requestPath):
         '''
         Constructs the request.
         
         @param requestPath: string
             The requested path.
+        @param method: integer
+            The method of the request, can be one of GET, INSERT, UPDATE or DELETE constants in this module.
         '''
+        assert isinstance(method, int), \
+        'Invalid method %s, needs to be one of the integer defined request methods' % method
         assert isinstance(requestPath, str), 'Invalid request path %s' % requestPath
+        self.method = method
         self.requestPath = requestPath
-
-class RequestGet(Request):
-    '''
-    Maps the get requests.
-    '''
-    
-    def __init__(self, requestPath):
-        '''
-        @see: Request.__init__
-        '''
-        super().__init__(requestPath)
 
 @guard
 class RequestResource:
@@ -127,7 +149,7 @@ class RequestResource:
     Provides the requested resource data.
     '''
     
-    def __init__(self, request, path):
+    def __init__(self, request, path, parameters):
         '''
         Constructs the resource request.
         
@@ -135,11 +157,29 @@ class RequestResource:
             The request that this resource request is based on.
         @param path: Path
             The path to the resource node.
+        @param params: list
+            A list of tuples containing on the first position the parameter name and on the second the
+            parameter value as provided in the request path. The parameters need to be transformed into arguments
+            and also removed from this list while doing that.
+            I did not use a dictionary on this since the parameter names might repeat and also the order might be
+            important.
+        @ivar arguments: dictionary
+            A dictionary containing as a key the argument name, this dictionary needs to be populated by the 
+            processors as seen fit, also the parameters need to be transformed to arguments.
         '''
         assert isinstance(request, Request), 'Invalid request %s' % request
         assert isinstance(path, Path), 'Invalid resource path %s' % path
+        assert isinstance(parameters, list), 'Invalid parameters list %s' % parameters
+        if __debug__:
+            for param in parameters:
+                assert isinstance(param, tuple), 'Invalid parameter %s, needs to be a tuple' % param
+                assert len(param) == 2, 'Invalid parameter %s, needs to have two elements' % param
+                assert isinstance(param[0], str) and isinstance(param[1], str), \
+                'Invalid parameter %s, needs to contain only strings' % param
         self.request = request
         self.path = path
+        self.parameters = parameters
+        self.arguments = {}
 
 @guard
 class RequestRender:
@@ -189,6 +229,7 @@ class Response(metaclass=abc.ABCMeta):
         self.message = None
         self.charSet = None
         self.contentType = None
+        self.allows = 0
     
     def setCharSet(self, charSet):
         '''
@@ -209,7 +250,18 @@ class Response(metaclass=abc.ABCMeta):
         '''
         assert isinstance(contentType, ContentType), 'Invalid content type %s' % contentType
         self.contentType = contentType
+    
+    def setAllows(self, method):
+        '''
+        Set the status of allowing get method. 
         
+        @param method: integer
+            The method of the request, can be one of GET, INSERT, UPDATE or DELETE constants in this module.
+        '''
+        assert isinstance(method, int), \
+        'Invalid method %s, needs to be one of the integer defined request methods' % method
+        self.allows |= method
+
     def setCode(self, code, message=None):
         '''
         Sets the provided code.
@@ -223,7 +275,7 @@ class Response(metaclass=abc.ABCMeta):
         assert message is None or isinstance(message, Message), 'Invalid message %s' % message
         self.code = code
         self.message = message
-    
+
     @abc.abstractmethod
     def dispatch(self):
         '''

@@ -9,9 +9,8 @@ Created on Jun 19, 2011
 Provides the nodes used in constructing the resources node tree.
 '''
 
-from ally.core.api.configure import propertiesFor
 from ally.core.api.operator import Model
-from ally.core.api.type import TypeProperty, TypeId
+from ally.core.api.type import TypeProperty, TypeId, Type, TypeModel, Input
 from ally.core.spec.resources import Converter, Match, Node, Invoker
 from ally.core.util import simpleName
 import logging
@@ -44,11 +43,11 @@ class MatchString(Match):
         assert isinstance(matchValue, str), 'Invalid string match value %s' % matchValue
         self.matchValue = matchValue
     
-    def value(self):
+    def asArgument(self, args):
         '''
-        @see: Match.value
+        @see: Match.asArgument
         '''
-        return None
+        # Nothing to do here
     
     def isValid(self):
         '''
@@ -56,7 +55,7 @@ class MatchString(Match):
         '''
         return True
     
-    def update(self, value):
+    def update(self, obj, objType):
         '''
         @see: Match.update
         '''
@@ -74,9 +73,9 @@ class MatchString(Match):
             return self.matchValue == other.matchValue
         return False
 
-class MatchTypePropertyId(Match):
+class MatchId(Match):
     '''
-    Match class for @see NodeTypePropertyId.
+    Match class for @see NodeId.
     
     @see: Match
     '''
@@ -88,26 +87,34 @@ class MatchTypePropertyId(Match):
         @param matchValue: integer|None
             The match integer value, none if the match will expect updates.
         '''
-        assert isinstance(node, NodeTypePropertyId), 'Invalid node %s needs to be node on type property' % node
+        assert isinstance(node, NodeId), 'Invalid node %s needs to be node on type property id' % node
         super().__init__(node)
         assert matchValue is None or isinstance(matchValue, int), \
         'Invalid match integer value %s, can be None' % matchValue
         self.matchValue = matchValue
     
-    def value(self):
+    def asArgument(self, args):
         '''
         @see: Match.value
         '''
-        return self.matchValue
+        assert isinstance(args, dict), 'Invalid arguments dictionary %s' % args
+        assert self.matchValue != None, 'This match %s has not value' % self
+        args[self.node.inputId.name] = self.matchValue
     
-    def update(self, value):
+    def update(self, obj, objType):
         '''
         @see: Match.update
         '''
-        model = propertiesFor(value)
-        if model == self.node.typeProperty.model:
-            self.matchValue = self.node.typeProperty.property.get(value)
-            return True
+        assert isinstance(objType, Type), 'Invalid object type %s' % objType
+        if isinstance(objType, TypeModel):
+            assert isinstance(objType, TypeModel)
+            if objType.model == self.node.inputId.type.model:
+                self.matchValue = self.node.inputId.type.property.get(obj)
+                return True
+        elif isinstance(objType, TypeProperty):
+            if objType == self.node.inputId.type:
+                self.matchValue = obj
+                return True
         return False
     
     def isValid(self):
@@ -125,7 +132,7 @@ class MatchTypePropertyId(Match):
         return converter.asString(self.matchValue)
     
     def __eq__(self, other):
-        return isinstance(other, MatchTypePropertyId)
+        return isinstance(other, MatchId)
 
 # --------------------------------------------------------------------
 
@@ -145,7 +152,7 @@ class NodeRoot(Node):
         '''
         super().__init__(None, ORDER_ROOT)
         assert isinstance(get, Invoker), 'Invalid get invoker %s' % get
-        assert len(get.inputTypes) == 0, 'No input types are allowed for the get on the root node'
+        assert len(get.inputs) == 0, 'No inputs are allowed for the get on the root node'
         self.get = get
 
     def tryMatch(self, converter, paths):
@@ -195,7 +202,7 @@ class NodeModel(Node):
         '''
         assert isinstance(converter, Converter), 'Invalid converter %s' % converter
         assert isinstance(paths, list), 'Invalid paths %s' % paths
-        assert len(paths) == 0, 'No path element in paths %s' % paths
+        assert len(paths) > 0, 'No path element in paths %s' % paths
         if converter.normalize(self._match.matchValue) == paths[0]:
             del paths[0]
             return self._match
@@ -215,26 +222,27 @@ class NodeModel(Node):
     def __str__(self):
         return '<%s[%s]>' % (simpleName(self), self.model)
 
-class NodeTypePropertyId(Node):
+class NodeId(Node):
     '''
     Provides a node based on a type property id.
     
     @see: Node
     '''
     
-    def __init__(self, parent, typeProperty):
+    def __init__(self, parent, inputId):
         '''
         @see: Node.__init__
         
-        @param typeProperty: TypeProperty
-            The type property represented by the node.
+        @param inputId: Input
+            The input with type property represented by the node.
         '''
-        assert isinstance(typeProperty, TypeProperty), 'Invalid type property %s' % typeProperty
-        assert isinstance(typeProperty.property.type, TypeId), \
-        'Invalid property type %s needs to be a type id' % typeProperty.property.type
-        assert typeProperty.property.type.forClass == int, \
-        'Invalid type id class %s needs to be integer' % typeProperty.property.type.forClass
-        self.typeProperty = typeProperty
+        assert isinstance(inputId, Input), 'Invalid input %s' % inputId
+        assert isinstance(inputId.type, TypeProperty), 'Invalid input type property %s' % inputId.type
+        assert isinstance(inputId.type.property.type, TypeId), \
+        'Invalid property type %s needs to be a type id' % inputId.type.property.type
+        assert inputId.type.forClass() == int, \
+        'Invalid type id class %s needs to be integer' % inputId.type.forClass()
+        self.inputId = inputId
         super().__init__(parent, ORDER_INTEGER)
 
     def tryMatch(self, converter, paths):
@@ -243,11 +251,11 @@ class NodeTypePropertyId(Node):
         '''
         assert isinstance(converter, Converter), 'Invalid converter %s' % converter
         assert isinstance(paths, list), 'Invalid paths %s' % paths
-        assert len(paths) == 0, 'No path element in paths %s' % paths
+        assert len(paths) > 0, 'No path element in paths %s' % paths
         try:
-            value = converter.convertInt(paths[0])
+            value = converter.convertInt(parse=paths[0])
             del paths[0]
-            return MatchTypePropertyId(self, value)
+            return MatchId(self, value)
         except ValueError:
             return None
 
@@ -255,12 +263,12 @@ class NodeTypePropertyId(Node):
         '''
         @see: Matcher.newMatch
         '''
-        return MatchTypePropertyId(self)
+        return MatchId(self)
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            return self.typeProperty == other.typeProperty
+            return self.inputId == other.inputId
         return False
 
     def __str__(self):
-        return '<%s[%s]>' % (simpleName(self), self.typeProperty)
+        return '<%s[%s]>' % (simpleName(self), self.inputId)

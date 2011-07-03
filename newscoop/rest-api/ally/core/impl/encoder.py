@@ -14,6 +14,7 @@ from xml.sax.saxutils import escape
 from ally.core.spec.presenting import Encoder, EncoderPath, EncoderFactory
 from ally.core.spec.resources import Path, Converter
 from ally.core.spec import content_type
+from ally.core.util import injected
 
 # --------------------------------------------------------------------
 
@@ -79,22 +80,21 @@ class EncoderBase(Encoder):
             self.__opened = False
         return name
 
+@injected
 class EncoderBaseFactory(EncoderFactory):
     '''
     Provides the base encoders factory class.
     Attention this class needs to be extended to provide the actual functionality.
     '''
     
-    def __init__(self, contentType, converter):
+    converter = Converter
+    # The converter used by the encoders of this factory.
+    
+    def __init__(self, contentType):
         '''
         @see: EncoderFactory.__init__
-        
-        @param converter: Converter
-            The converter used by the encoders of this factory.
         '''
         super().__init__(contentType)
-        assert isinstance(converter, Converter), 'Invalid converter %s' % converter
-        self.converter = converter
 
     def isValidFormat(self, format):
         '''
@@ -117,75 +117,82 @@ class EncoderXMLIndented(EncoderBase):
         super().__init__(out, encoderPath, factory)
         self._indent = ''
     
-    def put(self, name, value, path=None):
+    def put(self, name, value=None, path=None):
         '''
         @see: Encoder.put
         '''
-        name = self._converter.normalize(name)
+        fact = self._factory
+        assert isinstance(fact, EncoderXMLFactory)
+        name = fact.converter.normalize(name)
         super().put(name, value, path)
         self._out(self._indent)
         self._out('<')
         self._out(name)
         if path is not None:
             self._out(' href="')
-            self._out(escape(path))
+            self._out(escape(self._encoderPath.encode(path)))
             self._out('"')
         if value is not None:
             self._out('>')
-            self._out(escape(self._converter.asString(value)))
+            self._out(escape(fact.converter.asString(value)))
             self._out('</')
             self._out(name)
             self._out('>')
         else:
             self._out('/>')
-        self._out(self._factory.lineEnd)
+        self._out(fact.lineEnd)
         
     def open(self, name):
         '''
         @see: Encoder.open
         '''
+        fact = self._factory
+        assert isinstance(fact, EncoderXMLFactory)
         if self.isEmpty():
             self._out('<?xml version="1.0" encoding="utf-8"?>')
-            self._out(self._factory.lineEnd)
-        name = self._converter.normalize(name)
+            self._out(fact.lineEnd)
+        name = fact.converter.normalize(name)
         super().open(name)
         self._out(self._indent)
         self._out('<')
         self._out(name)
         self._out('>')
-        self._out(self._factory.lineEnd)
-        self._indent += self._factory.indented
+        self._out(fact.lineEnd)
+        self._indent += fact.indented
         
     def close(self):
         '''
         @see: Encoder.close
         '''
+        fact = self._factory
+        assert isinstance(fact, EncoderXMLFactory)
         name = super().close()
-        self._indent = self._indent[:-len(self._factory.indented)]
+        self._indent = self._indent[:-len(fact.indented)]
         self._out(self._indent)
         self._out('</')
         self._out(name)
         self._out('>')
-        self._out(self._factory.lineEnd)
+        self._out(fact.lineEnd)
         return name
+    
+    def __str__(self):
+        return self.__class__.__name__
 
 class EncoderXMLFactory(EncoderBaseFactory):
     '''
     Provides the XML encoders factory.
     '''
     
-    def __init__(self, converter, indented='    ', lineEnd='\n'):
+    indented = '    '
+    # The indented block to use default 4 spaces, can be changed.
+    lineEnd = '\n'
+    # The line end to use by default \n, can be changed.
+    
+    def __init__(self):
         '''
-        @see: EncoderBaseFactory.__init__
-        
-        @param indented: string
-            The indented block to use default 4 spaces, can be changed.
-        @param lineEnd: string
-            The line end to use by default \n, can be changed.
+        @see: EncoderFactory.__init__
         '''
-        super().__init__(content_type.XML, converter)
-        self.indented = indented
-        self.lineEnd = lineEnd
+        super().__init__(content_type.XML)
 
     def createEncoder(self, encoderPath, out):
         '''

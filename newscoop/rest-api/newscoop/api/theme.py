@@ -24,15 +24,15 @@ class Theme(Entity):
     '''
     Provides the theme model.
     '''
-    name = str
-    designer = str
-    version = str
-    minorNewscoopVersion = str
-    description = str
-    publication = Publication.id
-    frontImage = Resource.id
-    sectionImage = Resource.id
-    articleImage = Resource.id
+    Name = str
+    Designer = str
+    Version = str
+    MinorNewscoopVersion = str
+    Description = str
+    Publication = Publication.Id
+    FfrontImage = Resource.Id
+    SectionImage = Resource.Id
+    ArticleImage = Resource.Id
 
 # --------------------------------------------------------------------
   
@@ -57,7 +57,7 @@ class IThemeService(IEntityService):
     Provides the theme service.
     '''
     
-    @call(List(Theme.id), Publication.id, QTheme)
+    @call(List(Theme.Id), Publication.Id, QTheme)
     def forPublication(self, pubId, q=None):
         '''
         Provides the themes for the publication searched by the provided query.

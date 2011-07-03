@@ -21,7 +21,7 @@ class Publication(Entity):
     '''
     Provides the publication model.
     '''
-    name = str
+    Name = str
     
 # --------------------------------------------------------------------
 

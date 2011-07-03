@@ -8,14 +8,15 @@ Created on Jun 9, 2011
 
 Provides classes that provide general behaviour or functionality.
 '''
+from _abcoll import Iterable
 from inspect import isclass
 import inspect
-from _abcoll import Iterable
+import sys
 
 # --------------------------------------------------------------------
 
 # Flag indicating if the guarding should be enabled.
-GUARD_ENABLED = __debug__
+GUARD_ENABLED = True
 
 # --------------------------------------------------------------------
 
@@ -29,7 +30,7 @@ class Uninstantiable:
         '''
         Does not allow you to create an instance.
         '''
-        raise AssertionError('Cannot create an instance of "' + str(cls.__name__) + '" class');
+        raise AssertionError('Cannot create an instance of "' + str(cls.__name__) + '" class')
 
 # --------------------------------------------------------------------
 
@@ -43,7 +44,7 @@ class Singletone:
         Will always return the same instance.
         '''
         if not hasattr(cls, '__instance'):
-            cls.__instance = super().__new__(cls);
+            cls.__instance = super().__new__(cls)
         return cls.__instance
 
 # --------------------------------------------------------------------
@@ -61,8 +62,8 @@ class Protected:
         '''
         if not _isSameModule(cls):
             raise AssertionError('Cannot create an instance of "' + str(cls.__name__) + \
-                                 '" class from outside is module');
-        return super().__new__(cls, *args, **keyargs);
+                                 '" class from outside is module')
+        return super().__new__(cls, *args, **keyargs)
 
 # --------------------------------------------------------------------
 
@@ -81,6 +82,10 @@ def guard(*args, **keyargs):
     class MyClass
     'In this case all rules apply except if the public attribute myName has a None value it is possible to assign a
     not None value only once'
+    
+    @guard(allow='myName')
+    class MyClass
+    'In this case all rules apply except for the public attribute myName which can be changed from anywhere'
     '''
     if len(args) == 1:
         if GUARD_ENABLED:
@@ -113,14 +118,17 @@ class Guardian:
             check = True
         else:
             try:
-                oldValue = super().__getattribute__(name)
+                oldValue = self.__dict__[name]
                 check = True
-            except AttributeError:
+            except KeyError:
                 pass
             if check:
                 protect = self.__class__.protect_class
                 if oldValue is None and 'ifNoneSet' in protect:
                     if name == protect['ifNoneSet'] or name in protect['ifNoneSet']:
+                        check = False
+                if 'allow' in protect:
+                    if name == protect['allow'] or name in protect['allow']:
                         check = False
         if check and not _isSuperCall(self):
             raise AssertionError(('Illegal call, attribute (%s) from %s can be' + 
@@ -132,6 +140,60 @@ class Guardian:
             raise AssertionError(('Illegal call, attribute (%s) from %s can be' + 
                                  ' deleted only from class or super class') % (name, self))
         super().__delattr__(name)
+
+# --------------------------------------------------------------------
+
+def injected(clazz):
+    '''
+    Decorator for providing support for injecting.
+    '''
+    newClazz = type(clazz.__name__, (Injected, clazz), {})
+    newClazz.__module__ = clazz.__module__
+    return newClazz
+
+class Injected:
+    '''
+    Provides the support for classes that are injected.
+    '''
+    
+    @classmethod
+    def __new__(cls, *args):
+        '''
+        Constructs the instance of the injected class.
+        '''
+        obj = super().__new__(cls)
+        return obj
+    
+    def __init__(self, *args, **keyargs):
+        '''
+        Overriding initialization.
+        '''
+        self._arguments = (args, keyargs)
+
+    def initialize(self):
+        '''
+        Method called by the IoC, after the properties finalizations.
+        We will validate the object types that are found as class attributes and contain classes.
+        '''
+        for name, value in self.__class__.__dict__.items():
+            if isclass(value) and not name.startswith('_'):
+                inject = getattr(self, name, None)
+                if inject is None:
+                    raise AssertionError('There is no value injected for (%s) on class %s' % \
+                                         (name, simpleName(self)))
+                elif not isinstance(inject, value):
+                    raise AssertionError('Invalid inject value %s for name (%s) on class %s' % \
+                                         (inject, name, simpleName(self)))
+        args, keyargs = self._arguments
+        super().__init__(*args, **keyargs)
+
+def initialize(service):
+    '''
+    In case of injected resource it will initialize it.
+    '''
+    init = getattr(service, 'initialize', None)
+    if init is not None:
+        init()
 
 # --------------------------------------------------------------------
 
@@ -195,6 +257,24 @@ def simpleName(obj):
         obj = obj.__class__
     return obj.__name__
 
+def classForName(name):
+    '''
+    Provides the class for the provided fully qualified name of a class.
+    
+    @param name: string
+        The fully qualified class name,
+    @return: class
+        The class of the fully qualified name.
+    '''
+    parts = name.split(".")
+    module_name = ".".join(parts[:-1])
+    class_name = parts[-1]
+    if module_name == "":
+        return __import__(class_name)
+    else:
+        __import__(module_name)
+        return getattr(sys.modules[module_name], class_name)
+    
 # --------------------------------------------------------------------
 
 def _guardClass(clazz, protect=None):
@@ -230,7 +310,10 @@ def _isSameModule(obj):
     if not isclass(obj):
         obj = obj.__class__
     calframe = inspect.getouterframes(inspect.currentframe(), 2)
-    return inspect.getmodulename(calframe[2][1]) == obj.__module__
+    try:
+        return calframe[2][1] == sys.modules[obj.__module__].__file__
+    except:
+        return False
 
 def _isSuperCall(obj):
     if not isclass(obj):

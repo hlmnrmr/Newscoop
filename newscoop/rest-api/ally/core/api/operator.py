@@ -11,7 +11,7 @@ Provides the containers that describe the APIs.
 
 from inspect import ismodule, getargspec, isclass
 from ally.core.api.exception import InputException, OutputException
-from ally.core.api.type import Type, TypeClass
+from ally.core.api.type import Type, TypeClass, Input
 from ally.core.internationalization import msg as _
 from ally.core.util import simpleName, guard
 import logging
@@ -55,6 +55,9 @@ class Property:
     '''
     Provides the container for the API property types. It contains the operation that need to be
     applied on a model instance that relate to this property.
+    The property operator also provides a listener mechanism whenever the represented property this to be notified
+    for changes to the contained model. So if we have property 'name' automatically whenever the value is set if
+    the model contains the 'nameOnSet' method it will be called, and on deletion the 'nameOnDel' is called.
     '''
 
     def __init__(self, name, type):
@@ -99,6 +102,9 @@ class Property:
             raise InputException(_('The property $1 takes a parameter of type $2, illegal value $3',
                                  self.name, self.type, value))
         setattr(model, self._var, value)
+        listener = getattr(model, self.name + 'OnSet', None)
+        if listener is not None:
+            listener()
         log.debug('Success on setting value (%s) for %s', value, self)
     
     def remove(self, model):
@@ -113,6 +119,9 @@ class Property:
         assert not model is None, 'Invalid model object (None)'
         if hasattr(model, self._var):
             delattr(model, self._var)
+            listener = getattr(model, self.name + 'OnDel', None)
+            if listener is not None:
+                listener()
             log.debug('Success on removing value for %s', self)
             return True
         return False
@@ -244,6 +253,7 @@ class Criteria(Properties):
         if super().__eq__(other):
             return self.criteriaClass == other.criteriaClass
         return False
+    
 # --------------------------------------------------------------------
 
 @guard
@@ -253,7 +263,7 @@ class Call:
     Property types that are involved in input and output from the call.
     '''
     
-    def __init__(self, name, outputType, inputTypes, mandatoryCount):
+    def __init__(self, name, outputType, inputs, mandatoryCount):
         '''
         Constructs an API call that will have the provided input and output types.
         
@@ -261,24 +271,24 @@ class Call:
             The name of the function that will be called on the service implementation.
         @param outputType: Type
             The output type for the service call.
-        @param inputTypes: list
-            A list containing all the input types of the call.
+        @param inputs: list
+            A list containing all the Input's of the call.
         @param mandatoryCount: integer
             Provides the count of the mandatory input types, if the mandatory count is two and we have three input
             types it means that just the first two parameters need to be provided.
         '''
         assert isinstance(name, str) and str != '', 'Provide a valid name'
         assert isinstance(outputType, Type), 'Invalid output Type %s' % outputType
-        assert isinstance(inputTypes, list), 'Invalid input Types %s, needs to be a list' % inputTypes
+        assert isinstance(inputs, list), 'Invalid inputs %s, needs to be a list' % inputs
         assert isinstance(mandatoryCount, int), 'Invalid mandatory count <%s>, needs to be integer' % mandatoryCount
-        assert mandatoryCount >= 0 and mandatoryCount <= len(inputTypes), \
-        'Invalid mandatory count <%s>, needs to be greater than 0 and less than ' % (mandatoryCount, len(inputTypes))
+        assert mandatoryCount >= 0 and mandatoryCount <= len(inputs), \
+        'Invalid mandatory count <%s>, needs to be greater than 0 and less than ' % (mandatoryCount, len(inputs))
         if __debug__:
-            for typ in inputTypes:
-                assert isinstance(typ, Type), 'Not a input Type %s' % typ
+            for input in inputs:
+                assert isinstance(input, Input), 'Not an input %s' % input
         self.name = name
         self.outputType = outputType
-        self.inputTypes = inputTypes
+        self.inputs = inputs
         self.mandatoryCount = mandatoryCount
 
     def isCallable(self, impl):
@@ -309,24 +319,21 @@ class Call:
         assert not impl is None, 'Provide the service implementation to be used foe calling the represented function'
         assert isinstance(args, Iterable), 'The arguments %s need to be iterable' % str(args)
         valid = False
-        if len(args) >= self.mandatoryCount and len(self.inputTypes) >= len(args):
+        if len(args) >= self.mandatoryCount and len(self.inputs) >= len(args):
             valid = True
-            for type, value in zip(self.inputTypes, args):
-                if not type.isValid(value):
+            for inp, value in zip(self.inputs, args):
+                assert isinstance(inp, Input)
+                if not inp.type.isValid(value):
                     valid = False
                     break
         if not valid:
-            raise InputException(_('The arguments $1 provided are not compatible with the expected input $2',
-                                 args, self.inputTypes))
+            raise InputException(_('The arguments $1 provided are not compatible with the expected inputs $2',
+                                 args, self.inputs))
         if ismodule(impl):
-            func = self._findModuleFunction(impl)
-            assert not func is None, \
-            'Could not locate any function to call on the provided service module implementation'
+            func = getattr(impl, self.name)
             ret = func.__call__(*args)
         else:
-            func = self._findClassFunction(impl.__class__)
-            assert not func is None, \
-            'Could not locate any function to call on the provided service class implementation'
+            func = getattr(impl.__class__, self.name)
             ret = func.__call__(impl, *args)
             
         if not self.outputType.isValid(ret):
@@ -348,11 +355,11 @@ class Call:
         func = getattr(implClass, self.name, None)
         if not func is None:
             fnArgs = getargspec(func)
-            if len(fnArgs.args) == 1 + len(self.inputTypes):
+            if len(fnArgs.args) == 1 + len(self.inputs):
                 if fnArgs.defaults is None:
-                    if len(self.inputTypes) - self.mandatoryCount == 0:
+                    if len(self.inputs) - self.mandatoryCount == 0:
                         return func
-                elif len(self.inputTypes) - self.mandatoryCount == len(fnArgs.defaults):
+                elif len(self.inputs) - self.mandatoryCount == len(fnArgs.defaults):
                     return func
                         
     def _findModuleFunction(self, implModule):
@@ -366,23 +373,24 @@ class Call:
         func = getattr(implModule, self.name, None)
         if not func is None:
             fnArgs = getargspec(func)
-            if len(fnArgs.args) == len(self.inputTypes):
+            if len(fnArgs.args) == len(self.inputs):
                 if fnArgs.defaults is None:
-                    if len(self.inputTypes) - self.mandatoryCount == 0:
+                    if len(self.inputs) - self.mandatoryCount == 0:
                         return func
-                elif len(self.inputTypes) - self.mandatoryCount == len(fnArgs.defaults):
+                elif len(self.inputs) - self.mandatoryCount == len(fnArgs.defaults):
                     return func
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
             return self.name == other.name and self.outputType == other.outputType \
-                and self.inputTypes == other.inputTypes and self.mandatoryCount == other.mandatoryCount
+                and self.inputs == other.inputs and self.mandatoryCount == other.mandatoryCount
         return False
     
     def __str__(self):
         inputStr = []
-        for i, typ in enumerate(self.inputTypes):
-            inputStr.append(('defaulted:' if i >= self.mandatoryCount else '') + str(typ))
+        for i, inp in enumerate(self.inputs):
+            assert isinstance(inp, Input)
+            inputStr.append(('defaulted:' if i >= self.mandatoryCount else '') + inp.name + '=' + str(inp.type))
         return '<Call[%s %s(%s)]>' % (self.outputType, self.name, ', '.join(inputStr))
 
 @guard

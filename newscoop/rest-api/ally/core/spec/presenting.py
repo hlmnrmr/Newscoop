@@ -8,10 +8,11 @@ Created on Jun 30, 2011
 
 Module containing specifications for the presenting of resources.
 '''
-from ally.core.util import guard
-from importlib import abc
-from ally.core.spec.content_type import ContentType
+
 from ally.core.api.type import Type
+from ally.core.spec.content_type import ContentType
+from ally.core.util import guard, injected
+import abc
 
 # --------------------------------------------------------------------
 
@@ -50,7 +51,7 @@ class Encoder(metaclass=abc.ABCMeta):
         '''
     
     @abc.abstractmethod
-    def put(self, name, value, path=None):
+    def put(self, name, value=None, path=None):
         '''
         Encode the name value pair.
         
@@ -134,24 +135,20 @@ class Render(metaclass=abc.ABCMeta):
             the provided object type.
         '''
 
+@injected
 @guard
 class Renders:
     '''
     A simple container of renders.
     '''
     
-    def __init__(self, renders):
-        '''
-        Constructs the renders container based on the provided list of render instances.
-        
-        @param renders: list
-            The list of render objects.
-        '''
-        assert isinstance(renders, list), 'Invalid list of renders %s' % list
+    renders = list
+    # The list of render objects.
+    
+    def __init__(self):
         if __debug__:
-            for render in renders:
+            for render in self.renders:
                 assert isinstance(render, Render), 'Invalid renderer %s' % render
-        self.renders = renders
     
     def render(self, obj, objType, encoder):
         '''
@@ -165,7 +162,7 @@ class Renders:
             The encoder to write to object to.
         '''
         assert isinstance(objType, Type), 'Invalid object type %s' % objType
-        assert isinstance(objType, Encoder), 'Invalid encoder %s' % encoder
+        assert isinstance(encoder, Encoder), 'Invalid encoder %s' % encoder
         for render in self.renders:
             assert isinstance(render, Render)
             if render.render(obj, objType, encoder, self):

@@ -8,14 +8,14 @@ Created on Jun 28, 2011
 
 Provides the converters used in parsing path and contents.
 '''
+
 from ally.core.spec.resources import Converter
-import numbers
 
 # --------------------------------------------------------------------
 
 class Standard(Converter):
     '''
-    Provides stabdard type conversion
+    Provides standard type conversion
     
     @see: Standard
     '''
@@ -27,25 +27,12 @@ class Standard(Converter):
         assert isinstance(value, str), 'Invalid string value %s' % value
         return value
     
-    def asString(self, objValue):
-        '''
-        @see: Standard.asString
-        '''
-        assert not objValue == None, 'No object value is provided'
-        if isinstance(objValue, bool):
-            return self.convertBool(objValue)
-        if isinstance(objValue, int):
-            return self.convertInt(objValue)
-        if isinstance(objValue, numbers.Number):
-            return self.convertInt(objValue)
-        raise AssertionError('Invalid object value %s' % objValue)
-    
     def convertBool(self, boolValue=None, parse=None):
         '''
         @see: Standard.convertBool
         '''
-        assert not boolValue == None and parse == None, 'No value is provided'
-        assert not boolValue != None and parse != None, 'Only one value needs to be provided'
+        assert not (boolValue == None and parse == None), 'No value is provided'
+        assert not (boolValue != None and parse != None), 'Only one value needs to be provided'
         if boolValue is not None:
             return str(boolValue)
         return bool(parse)
@@ -54,8 +41,8 @@ class Standard(Converter):
         '''
         @see: Standard.convertInt
         '''
-        assert not intValue == None and parse == None, 'No value is provided'
-        assert not intValue != None and parse != None, 'Only one value needs to be provided'
+        assert not (intValue == None and parse == None), 'No value is provided'
+        assert not (intValue != None and parse != None), 'Only one value needs to be provided'
         if intValue is not None:
             return str(intValue)
         return int(parse)        
@@ -64,8 +51,8 @@ class Standard(Converter):
         '''
         @see: Standard.convertDecimal
         '''
-        assert not decValue == None and parse == None, 'No value is provided'
-        assert not decValue != None and parse != None, 'Only one value needs to be provided'
+        assert not (decValue == None and parse == None), 'No value is provided'
+        assert not (decValue != None and parse != None), 'Only one value needs to be provided'
         if decValue is not None:
             return str(decValue)
         return float(decValue)

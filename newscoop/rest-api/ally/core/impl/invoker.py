@@ -36,7 +36,7 @@ class InvokerCall(Invoker):
         self.service = service
         self.implementation = implementation
         self.call = call
-        super().__init__(call.outputType, call.name, call.inputTypes, call.mandatoryCount)
+        super().__init__(call.outputType, call.name, call.inputs, call.mandatoryCount)
 
     def invoke(self, *args):
         '''
@@ -51,7 +51,7 @@ class InvokerFunction(Invoker):
     Provides invoking for API calls.
     '''
     
-    def __init__(self, outputType, function, inputTypes, mandatoryCount):
+    def __init__(self, outputType, function, inputs, mandatoryCount):
         '''
         @see: Invoker.__init__
         
@@ -59,7 +59,7 @@ class InvokerFunction(Invoker):
             The Callable to invoke.
         '''
         assert isinstance(function, Callable), 'Invalid input callable provided %s' % function
-        super().__init__(outputType, function.__name__, inputTypes, mandatoryCount)
+        super().__init__(outputType, function.__name__, inputs, mandatoryCount)
         self.function = function
 
     def invoke(self, *args):

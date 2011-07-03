@@ -9,9 +9,11 @@ Created on Jun 18, 2011
 Module containing specifications for the resources tree.
 '''
 
-from ally.core.api.type import Type
+from ally.core.api.type import Type, Input
 from ally.core.util import simpleName, guard
 import abc
+import numbers
+from inspect import isclass
 
 # --------------------------------------------------------------------
 
@@ -38,36 +40,36 @@ class Path:
         self.matches = matches
         self.node = node
         
-    def values(self):
+    def toArguments(self):
         '''
-        Provides the parameter values represented by this path.
+        Provides the list of arguments contained in this path.
         
-        @return: list
-            Return the list of parameters represented by the path, can be empty list if there are none.
+        @return: dictionary
+            Return the dictionary of arguments of this path the key is the name of the argument, can be empty list
+            if there are no arguments.
         '''
-        values = []
+        args = {}
         for match in self.matches:
             assert isinstance(match, Match)
-            value = match.value()
-            if value is not None:
-                if isinstance(value, list):
-                    values.extend(value)
-                values.append(value)
-        return values
+            match.asArgument(args)
+        return args
     
-    def update(self, value):
+    def update(self, obj, objType):
         '''
-        Updates all the matches in the path with the provided value.
+        Updates all the matches in the path with the provided value. This method looks like a render method 
+        expecting value and type, this because the path is actually a renderer for the paths elements.
         
-        @param value: object
-            The value to update with.
+        @param obj: object
+            The object value to update with.
+        @param objType: Type
+            The object type.
         @return: boolean
             True if at least a match has a successful update, false otherwise.
         '''
         sucess = False
         for match in self.matches:
             assert isinstance(match, Match)
-            sucess |= match.update(value)
+            sucess |= match.update(obj, objType)
         return sucess
 
     def isValid(self):
@@ -145,7 +147,6 @@ class Converter(metaclass=abc.ABCMeta):
             The normalized string.
         '''
     
-    @abc.abstractmethod
     def asString(self, objValue):
         '''
         Converts the provided object to a string. First it will detect the type and based on that it will call
@@ -156,6 +157,37 @@ class Converter(metaclass=abc.ABCMeta):
         @return: string
             The string form of the provided value object.
         '''
+        assert objValue is not None, 'No object value is provided'
+        if isinstance(objValue, str):
+            return objValue
+        if isinstance(objValue, bool):
+            return self.convertBool(objValue)
+        if isinstance(objValue, int):
+            return self.convertInt(objValue)
+        if isinstance(objValue, numbers.Number):
+            return self.convertInt(objValue)
+        raise AssertionError('Invalid object value %s' % objValue)
+        
+    def asValue(self, strValue, objType):
+        '''
+        Parses the string value into an object value depending on the provided object type.
+        
+        @param strValue: string
+            The string representation of the object to be parsed.
+        @param objType: class
+            The type of object to which the string should be parsed.
+        '''
+        assert isinstance(strValue, str), 'Invalid string value %s' % strValue
+        assert isclass(objType), 'Invalid object type %s' % objType
+        if objType == str:
+            return strValue
+        if objType == bool:
+            return self.convertBool(parse=strValue)
+        if objType == int:
+            return self.convertInt(parse=strValue)
+        if objType == numbers.Number:
+            return self.convertInt(parse=strValue)
+        raise AssertionError('Invalid object type %s' % objType)
     
     @abc.abstractmethod
     def convertBool(self, boolValue=None, parse=None):
@@ -222,22 +254,24 @@ class Match(metaclass=abc.ABCMeta):
         self.node = node
     
     @abc.abstractmethod
-    def value(self):
+    def asArgument(self, args):
         '''
-        Provides the parameter represented by this match.
+        Populates in the provided dictionary of arguments, the key represents the argument name.
         
-        @return: object|list|None
-            Return the parameter or list of parameters represented by the match, None if the match is not 
-            providing any parameter.
+        @param args: dictionary
+            The dictionary where the argument(s) name and value(s) of this match will be populated.
         '''
     
     @abc.abstractmethod
-    def update(self, value):
+    def update(self, obj, objType):
         '''
-        Updates the match represented value.
+        Updates the match represented value. This method looks like a render method expecting value and type,
+        this because the match is actually a renderer for path elements.
         
-        @param value: object
-            The value to update with.
+        @param obj: object
+            The object value to update with.
+        @param objType: Type
+            The object type.
         @return: boolean
             True if the updated was successful, false otherwise.
         '''
@@ -276,7 +310,7 @@ class Invoker(metaclass=abc.ABCMeta):
     Contains all the data required for accessing a call.
     '''
     
-    def __init__(self, outputType, name, inputTypes, mandatoryCount):
+    def __init__(self, outputType, name, inputs, mandatoryCount):
         '''
         Constructs an invoker.
         
@@ -284,24 +318,24 @@ class Invoker(metaclass=abc.ABCMeta):
             The output type of the invoker.
         @param name: string
             The name of the invoker.
-        @param inputTypes: list
-            The list of input Type(s) for the invoker, attention not all input types are mandatory.
+        @param inputs: list
+            The list of Inputs for the invoker, attention not all inputs are mandatory.
         @param mandatoryCount: integer
             Provides the count of the mandatory input types, if the mandatory count is two and we have three input
             types it means that just the first two parameters need to be provided.
         '''
         assert isinstance(outputType, Type), 'Invalid output type %s' % outputType
         assert isinstance(name, str), 'Invalid name %s' % name
-        assert isinstance(inputTypes, list), 'Invalid input types list %s' % inputTypes
+        assert isinstance(inputs, list), 'Invalid inputs list %s' % inputs
         assert isinstance(mandatoryCount, int), 'Invalid mandatory count <%s>, needs to be integer' % mandatoryCount
-        assert mandatoryCount >= 0 and mandatoryCount <= len(inputTypes), \
-        'Invalid mandatory count <%s>, needs to be greater than 0 and less than ' % (mandatoryCount, len(inputTypes))
+        assert mandatoryCount >= 0 and mandatoryCount <= len(inputs), \
+        'Invalid mandatory count <%s>, needs to be greater than 0 and less than ' % (mandatoryCount, len(inputs))
         if __debug__:
-            for typ in inputTypes:
-                assert isinstance(typ, Type), 'Invalid input type %s' % typ
+            for inp in inputs:
+                assert isinstance(inp, Input), 'Invalid input %s' % inp
         self.outputType = outputType
         self.name = name
-        self.inputTypes = inputTypes
+        self.inputs = inputs
         self.mandatoryCount = mandatoryCount
     
     @abc.abstractmethod
@@ -315,8 +349,8 @@ class Invoker(metaclass=abc.ABCMeta):
 
     def __str__(self):
         inputStr = []
-        for i, typ in enumerate(self.inputTypes):
-            inputStr.append(('defaulted:' if i >= self.mandatoryCount else '') + str(typ))
+        for i, inp in enumerate(self.inputs):
+            inputStr.append(('defaulted:' if i >= self.mandatoryCount else '') + inp.name + '=' + str(inp.type))
         return '<%s[%s %s(%s)]>' % (simpleName(self), self.outputType, self.name, ', '.join(inputStr))
 
 @guard(ifNoneSet=('get', 'insert', 'update', 'delete'))
@@ -446,4 +480,32 @@ class ResourcesManager(metaclass=abc.ABCMeta):
             A list of string path elements identifying a resource to be searched for.
         @return: Path
             The path leading to the node that provides the paths resource.
+        '''
+    
+    @abc.abstractmethod
+    def findAllPaths(self, outputType, *inputTypes):
+        '''
+        Finds all the resource nodes that has a get method having the provided input type(s).
+        
+        @param outputType: Type|None
+            The output type to locate the path for, None if not required.
+        @param inputTypes: tuple
+            The input types tuple to locate the path for.
+        @return: list
+            A list of paths leading to the nodes having a get method with the requested input type(s), might be
+            empty if no such nodes exist.
+        '''
+
+    @abc.abstractmethod
+    def findShortPath(self, outputType, *inputTypes):
+        '''
+        Finds the resource node that has a get method having the provided input type(s) that is has the shortest
+        path leading to it.
+        
+        @param outputType: Type|None
+            The output type to locate the path for, None if not required.
+        @param inputTypes: tuple
+            The input types tuple to locate the path for.
+        @return: Path|None
+            The shortest path leading to the node or None if no node is found.
         '''
