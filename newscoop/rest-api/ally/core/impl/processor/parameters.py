@@ -9,12 +9,14 @@ Created on Jul 3, 2011
 Provides the parameters handler.
 '''
 
-from ally.core.api.type import Input, Type, Iter
+from ally.core.api.exception import InputException
 from ally.core.internationalization import msg as _
-from ally.core.spec.codes import ILLEGAL_PARAM
-from ally.core.spec.resources import Node, Invoker, Converter
+from ally.core.spec.codes import ILLEGAL_PARAM, UNKNOWN_PARAMS
+from ally.core.spec.presenting import DecoderParams
+from ally.core.spec.resources import Node, Invoker
 from ally.core.spec.server import Processor, ProcessorsChain, RequestResource, \
     Response, GET
+from ally.core.util import injected
 import logging
 
 # --------------------------------------------------------------------
@@ -23,15 +25,19 @@ log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------
 
+@injected
 class ParametersHandler(Processor):
     '''
     Implementation for a processor that provides the transformation of parameters into arguments, if this is required.
     '''
     
-    converter = Converter
-    # The converter used in parsing the parameter values.    
-    allValue = '*'
-    # Used in marking the all values in parameters.
+    decoders = list
+    # The parameters decoders used for obtaining the arguments.
+    
+    def __init__(self):
+        if __debug__:
+            for decoder in self.decoders:
+                assert isinstance(decoder, DecoderParams), 'Invalid parameters decoder %s' % decoder
     
     def process(self, requestResource, responseAny, chain):
         '''
@@ -50,46 +56,21 @@ class ParametersHandler(Processor):
                 invoker = node.get
                 assert isinstance(invoker, Invoker)
                 # We only consider as parameters the not mandatory primitive inputs.
-                for k in range(invoker.mandatoryCount, len(invoker.inputs)):
-                    inp = invoker.inputs[k]
-                    assert isinstance(inp, Input)
-                    typ = inp.type
-                    isList = False
-                    # Need to check if is not a list.
-                    if isinstance(typ, Iter):
-                        typ = typ.itemType
-                        isList = True
-                    assert isinstance(typ, Type)
-                    if not typ.isPrimitive:
-                        continue
-                    typ = typ.forClass()
-                    params = []
-                    k = 0
-                    while k < len(requestResource.parameters):
-                        if requestResource.parameters[k][0] == inp.name:
-                            params.append(requestResource.parameters[k])
-                            del requestResource.parameters[k]
-                            k -= 1
-                        k += 1
-                    if len(params) > 1:
-                        if not isList:
-                            response.setCode(ILLEGAL_PARAM, _('Parameter ($1) needs to be provided just once', inp.name))
-                            log.warning('To many parameters of name %s for %s', inp.name, requestResource.parameters)
+                params = list(requestResource.parameters)
+                inputs = [invoker.inputs[k] for k in range(invoker.mandatoryCount, len(invoker.inputs))]
+                for inp in inputs:
+                    for decoder in self.decoders:
+                        assert isinstance(decoder, DecoderParams)
+                        try:
+                            decoder.decode(inputs, inp, params, requestResource.arguments)
+                        except InputException as e:
+                            assert isinstance(e, InputException)
+                            response.setCode(ILLEGAL_PARAM, e.message)
+                            log.warning('Problems converting parameters: %s', e.message.default)
                             return
-                        values = []
-                        for param in params:
-                            if param[1] is None:
-                                response.setCode(ILLEGAL_PARAM, _('Parameter ($1) needs to have a value', inp.name))
-                                log.warning('No value for parameter %s', inp.name)
-                                return
-                            values.append(self.converter.asValue(param[1], typ))
-                        requestResource.arguments[inp.name] = values
-                    elif len(params) == 1:
-                        value = params[0][1]
-                        if value is None:
-                            response.setCode(ILLEGAL_PARAM, _('Parameter ($1) needs to have a value', inp.name))
-                            log.warning('No value for parameter %s', inp.name)
-                            return
-                        if value != '*':
-                            requestResource.arguments[inp.name] = self.converter.asValue(value, typ)
+                if len(params) > 0:
+                    response.setCode(UNKNOWN_PARAMS, _('Unknown parameters: $1', \
+                                                       ', '.join([param[0] for param in params])))
+                    log.warning('Unsolved request parameters %s', params)
+                    return
         chain.process(requestResource, responseAny)

@@ -16,7 +16,7 @@ import sys
 # --------------------------------------------------------------------
 
 # Flag indicating if the guarding should be enabled.
-GUARD_ENABLED = True
+GUARD_ENABLED = __debug__
 
 # --------------------------------------------------------------------
 

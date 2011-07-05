@@ -17,20 +17,93 @@ import abc
 # --------------------------------------------------------------------
 
 @guard
+class DecoderParams(metaclass=abc.ABCMeta):
+    '''
+    Provides the decoding for request parameters.
+    '''
+    
+    @abc.abstractmethod
+    def decode(self, inputs, input, params, args):
+        '''
+        Decodes based on the input from the provided parameters the arguments that will be populated into args.
+        If based on the provided input there are relevant parameters than remove those parameters from the provided
+        list than the obtained arguments are added to the args dictionary.
+        
+        @param inputs: list
+            The list of inputs involved in the decoding process, this are used to prevent confusion in
+            decoding parameter names.
+        @param input: Input
+            The input to decode arguments for.
+        @param params: list
+            The list of tuples (param name, param value) to extract the arguments from, all the parameters that 
+            are used need to be removed from the list.
+        @param args: dictionary
+            The dictionary {arg name:arg value} that will be populated with the obtained argument values.
+        @raise InputException: Thrown if a parameter does not contain the right value. 
+        '''
+
+# --------------------------------------------------------------------
+
+@guard
 class EncoderPath(metaclass=abc.ABCMeta):
     '''
     Provides the path encoding.
     '''
     
     @abc.abstractmethod
-    def encode(self, path):
+    def encode(self, path, parameters=None):
         '''
         Encodes the provided path to a full request path.
         
         @param path: Path
             The path to be encoded.
+        @param parameters: list
+            A list of tuples containing on the first position the parameter string name and on the second the string
+            parameter value as to be represented in the request path.
         @return: object
             The full compiled request path, the type depends on the implementation.
+        '''
+
+@guard
+class EncoderParams(metaclass=abc.ABCMeta):
+    '''
+    Provides the encoding from inputs to request parameters.
+    '''
+    
+    @abc.abstractmethod
+    def encode(self, inputs, input, arg, params):
+        '''
+        Encodes based on the input and provided argument value into the parameters list.
+        
+        @param inputs: list
+            The list of inputs involved in the encoding process, this are used to prevent confusion in
+            encoding parameter names.
+        @param input: Input
+            The input to encode the argument value for.
+        @param arg: object
+            The object value represented by the input to encode it.
+        @param params: list
+            A list of tuples containing on the first position the parameter string name and on the second the string
+            parameter value as to be represented in the request path. To this list all the obtained parameters will 
+            be added.
+        @return: boolean
+            True if this encoder has successful encoded the input, False otherwise.
+        '''
+    
+    @abc.abstractmethod
+    def encodeModels(self, inputs, input, models):
+        '''
+        Encodes the models represented by the provided input. The model is represented as a tuple 
+        (isList, type, value), where isList specifies if the parameter contains a list, type the type of the 
+        parameter and value needs to be either a string or list of strings depending on the isList flag.
+        
+        @param inputs: list
+            The list of inputs involved in the encoding process, this are used to prevent confusion in
+            encoding parameter names.
+        @param input: Input
+            The input to encode the argument value for.
+        @param models: dictionary
+            A dictionary having as a key the parameter name and as a value the model.
         '''
 
 @guard

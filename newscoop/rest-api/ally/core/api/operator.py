@@ -9,13 +9,13 @@ Created on May 29, 2011
 Provides the containers that describe the APIs.
 '''
 
-from inspect import ismodule, getargspec, isclass
+from _abcoll import Iterable
 from ally.core.api.exception import InputException, OutputException
 from ally.core.api.type import Type, TypeClass, Input
 from ally.core.internationalization import msg as _
 from ally.core.util import simpleName, guard
+from inspect import ismodule, getargspec, isclass
 import logging
-from _abcoll import Iterable
 
 # --------------------------------------------------------------------
 
@@ -165,6 +165,16 @@ class Model(Properties):
             for prop in properties.values():
                 assert prop.type.isPrimitive, 'Not a primitive type for %s' % prop
 
+    def createModel(self):
+        '''
+        Creates a new model object based on the contained model class.
+        
+        @return: object
+            The newly created model instance.
+        '''
+        log.debug('Created model instance for class %s', self.modelClass)
+        return self.modelClass()
+
     def __eq__(self, other):
         if super().__eq__(other):
             return self.modelClass == other.modelClass and self.name == other.name
@@ -200,6 +210,16 @@ class Query:
                 assert isinstance(crt, CriteriaEntry), 'Not a CriteriaEntry %s' % crt
         self.queryClass = queryClass
         self.criteriaEntries = criteriaEntries
+        
+    def createQuery(self):
+        '''
+        Creates a new query object based on the contained query class.
+        
+        @return: object
+            The newly created query instance.
+        '''
+        log.debug('Created query instance for class %s', self.queryClass)
+        return self.queryClass()
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
@@ -226,6 +246,21 @@ class CriteriaEntry(Property):
         assert isinstance(criteria, Criteria), 'Invalid criteria %s' % criteria
         self.criteria = criteria
         super().__init__(name, TypeClass(criteria.criteriaClass))
+        
+    def obtain(self, query):
+        '''
+        If there is already a value for the criteria property it will provide that if there is no value available it
+        will create one.
+        
+        @param query: object
+            The query instance to provide the value for.
+        '''
+        assert not query is None, 'Invalid query object (None)'
+        criteria = self.get(query)
+        if criteria is None:
+            criteria = self.criteria.createCriteria(query, self)
+            self.set(query, criteria)
+        return criteria
 
 class Criteria(Properties):
     '''
@@ -248,6 +283,26 @@ class Criteria(Properties):
         if __debug__:
             for prop in properties.values():
                 assert prop.type.isPrimitive, 'Not a primitive type for %s' % prop
+
+    def createCriteria(self, query, criteriaEntry):
+        '''
+        Creates a new criteria object based on the contained criteria class.
+        
+        @param query: object
+            The query object of the criteria.
+        @param criteriaEntry: CriteriaEntry
+            The criteria entry creating the criteria instance.
+        @return: object
+            The newly created criteria instance.
+        '''
+        assert not query is None, 'Invalid query object (None)'
+        assert isinstance(criteriaEntry, CriteriaEntry), 'Invalid criteria entry %s' % criteriaEntry
+        criteria = self.criteriaClass()
+        criteria.query = query
+        criteria.entryName = criteriaEntry.name
+        log.debug('Created criteria with name (%s) for query %s as class %s', \
+                  criteriaEntry.name, query, self.criteriaClass)
+        return criteria
 
     def __eq__(self, other):
         if super().__eq__(other):
@@ -321,8 +376,10 @@ class Call:
         valid = False
         if len(args) >= self.mandatoryCount and len(self.inputs) >= len(args):
             valid = True
-            for inp, value in zip(self.inputs, args):
+            for k, inp, value in zip(range(len(self.inputs)), self.inputs, args):
                 assert isinstance(inp, Input)
+                if value is None and k >= self.mandatoryCount:
+                    continue
                 if not inp.type.isValid(value):
                     valid = False
                     break

@@ -196,13 +196,7 @@ class APIEntry():
         query = query or self._getQuery(instance)
         crtEntry = crtEntry or self._getCriteriaEntry(instance, query)
         assert isinstance(crtEntry, CriteriaEntry)
-        criteria = crtEntry.get(query)
-        if criteria is None:
-            criteria = self.criteriaClass()
-            criteria.query = query
-            criteria.entryName = crtEntry.name
-            crtEntry.set(query, criteria)
-        return criteria
+        return crtEntry.obtain(instance)
     
     def __get__(self, instance, owner):
         '''

@@ -42,7 +42,7 @@ class EncodingHandler(Processor):
             for factory in self.encoderFactories:
                 assert isinstance(factory, EncoderFactory), 'Invalid encoder factory %s' % factory
     
-    def process(self, request, responseFormat, chain):
+    def process(self, requestAny, responseFormat, chain):
         '''
         @see: Processor.process
         '''
@@ -65,7 +65,9 @@ class EncodingHandler(Processor):
             encoder = factory.createEncoder(responseFormat.encoderPath, out)
             log.debug('Created encoder with content type %s and character set %s', \
                       factory.contentType.content, self.charSet.format)
-            chain.process(request, encoder)
+            chain.process(requestAny, encoder)
+        else:
+            chain.process(requestAny, responseFormat)
                     
     def _findEncoderFactory(self, format):
         if format is None:

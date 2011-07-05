@@ -10,7 +10,7 @@ Provides the invoking handler.
 '''
 
 from ally.core.internationalization import msg as _
-from ally.core.spec.codes import NOT_AVAILABLE, INTERNAL_ERROR, UNKNOWN_PARAMS
+from ally.core.spec.codes import NOT_AVAILABLE, INTERNAL_ERROR
 from ally.core.spec.resources import Path, Node, Invoker
 from ally.core.spec.server import Processor, ProcessorsChain, RequestResource, \
     RequestRender, Response, INSERT, UPDATE, DELETE, GET
@@ -55,11 +55,6 @@ class InvokingHandler(Processor):
                     response.setCode(NOT_AVAILABLE, _('Path not available for get'))
                     log.warning('Cannot find a get method for node %s', node)
                     return
-                if len(requestResource.parameters) > 0:
-                    response.setCode(UNKNOWN_PARAMS, _('Unknown parameters: $1', \
-                                                       ', '.join([param[0] for param in requestResource.parameters])))
-                    log.warning('Unsolved request parameters %s', requestResource.parameters)
-                    return
                 assert isinstance(invoker, Invoker)
                 argsDict = path.toArguments()
                 argsDict.update(requestResource.arguments)
@@ -68,7 +63,7 @@ class InvokingHandler(Processor):
                     try:
                         args.append(argsDict[inp.name])
                     except KeyError:
-                        break
+                        args.append(None)
                 try:
                     model = invoker.invoke(*args)
                     requestRender = RequestRender(requestResource, model, invoker.outputType)
@@ -79,7 +74,8 @@ class InvokingHandler(Processor):
                     log.error('An exception occurred while trying to invoke %s with values %s', \
                               invoker, args)
                     traceback.print_exc()
-                return
+                    return
             else:
                 raise AssertionError('Cannot process request %s' % requestResource.request)
-        chain.process(requestResource, responseAny)
+        else:
+            chain.process(requestResource, responseAny)

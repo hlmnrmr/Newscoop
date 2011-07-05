@@ -59,10 +59,7 @@ class HTTPResponse(Response):
             msg = self.message.default
         code = self.code
         assert isinstance(code, Code)
-        if code.isSuccess:
-            rq.send_response(code.code, msg)
-        else:
-            rq.send_error(code.code, msg)
+        rq.send_response(code.code, msg)
         rq.end_headers()
         self.isDispatched = True
         return rq.wfile

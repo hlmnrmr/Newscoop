@@ -9,7 +9,8 @@ Created on Jun 23, 2011
 Test implementation for publication API.
 '''
 
-from newscoop.api.publication import IPublicationService, Publication
+from newscoop.api.publication import IPublicationService, Publication, \
+    QPublication
 
 # --------------------------------------------------------------------
 
@@ -21,7 +22,7 @@ class PublicationServiceTest(IPublicationService):
     def __init__(self):
         super().__init__(self)
         self.publications = {}
-        for i in range(1, 10):
+        for i in range(1, 1000):
             pub = Publication()
             pub.Id = i
             pub.Name = 'Publication ' + str(i)
@@ -32,9 +33,18 @@ class PublicationServiceTest(IPublicationService):
 
     def all(self, offset=None, limit=None, q=None):
         k = 0
-        for id in self.publications.keys():
+        for id, pub in self.publications.items():
+            assert isinstance(pub, Publication)
             if (offset is None or k >= offset) and (limit is None or k - offset < limit):
-                yield id
+                if q is not None:
+                    assert isinstance(q, QPublication)
+                    if q.name.like is not None:
+                        if pub.Name.find(q.name.like) >= 0:
+                            yield id
+                    else:
+                        yield id
+                else:
+                    yield id
             k += 1
 
     # ---------------------------------------------

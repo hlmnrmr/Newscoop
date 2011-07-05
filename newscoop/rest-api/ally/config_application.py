@@ -12,10 +12,11 @@ Provides the configurations for the web server.
 # --------------------------------------------------------------------
 import logging
 from ally.core.impl.processor.parameters import ParametersHandler
+from ally.core.impl.encdec_params import EncDecPrimitives, EncDecQuery
+from ally.core.impl.processor.hinting import HintingHandler
 
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.WARN)
-from ally.core import util
-util.GUARD_ENABLED = __debug__
+#logging.basicConfig(level=logging.DEBUG)
 # --------------------------------------------------------------------
 
 from ally.core.util import initialize
@@ -51,6 +52,16 @@ converterContent = Standard()
 initialize(converterContent)
 
 # --------------------------------------------------------------------
+# Creating the parameters encoders and decoders
+encDecPrimitives = EncDecPrimitives()
+encDecPrimitives.converter = converterPath
+initialize(encDecPrimitives)
+
+encDecQuery = EncDecQuery()
+encDecQuery.converter = converterPath
+initialize(encDecQuery)
+
+# --------------------------------------------------------------------
 # Creating the encodings
 encodingXML = EncoderXMLFactory()
 encodingXML.converter = converterContent
@@ -80,12 +91,16 @@ renders.renders = [renderListPath, renderListIds, renderModel]
 uri = URIHandler()
 uri.resourcesManager = resourcesManager
 uri.converter = converterPath
-uri.domain = 'http://localhost/'
+uri.netloc = 'localhost'
 initialize(uri)
 
 parameters = ParametersHandler()
-parameters.converter = converterPath
+parameters.decoders = [encDecPrimitives, encDecQuery]
 initialize(parameters)
+
+hintingHandler = HintingHandler()
+hintingHandler.encoders = [encDecPrimitives, encDecQuery]
+initialize(hintingHandler)
 
 invokingHandler = InvokingHandler()
 initialize(invokingHandler)
@@ -99,7 +114,7 @@ renderingHandler = RenderingHandler()
 renderingHandler.renders = renders
 initialize(renderingHandler)
 
-processors = [uri, parameters, invokingHandler, encoding, renderingHandler]
+processors = [uri, parameters, hintingHandler, invokingHandler, encoding, renderingHandler]
 
 # --------------------------------------------------------------------
 # Creating the server processors container

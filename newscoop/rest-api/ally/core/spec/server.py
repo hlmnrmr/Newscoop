@@ -158,7 +158,7 @@ class RequestResource:
         @param path: Path
             The path to the resource node.
         @param params: list
-            A list of tuples containing on the first position the parameter name and on the second the
+            A list of tuples containing on the first position the parameter string name and on the second the string
             parameter value as provided in the request path. The parameters need to be transformed into arguments
             and also removed from this list while doing that.
             I did not use a dictionary on this since the parameter names might repeat and also the order might be
@@ -216,7 +216,7 @@ class Response(metaclass=abc.ABCMeta):
         '''
         Constructs the response. 
         
-        @ivar code: integer
+        @ivar code: Code
             The code of the response, do not update this directly use a one of the methods.
         @ivar message: Message
             A message for the code, do not update this directly use a one of the methods.

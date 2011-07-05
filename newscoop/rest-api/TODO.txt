@@ -1,3 +1,5 @@
-- Add to queries also properties so you can map simple unique per query data, like offset and limit
-- The call input types should be only Types of property, model or query not allow simple unlinked types.
 - The model should not accept linked property types that are not id types.
+- In the parameter encoders for the query encoder we can make also processors to handle the different type of inputs
+  for instance a OrderCriteriaHandler, SimpleCriteriaHandler ... Also the arguments and parameters might be wrapped
+  in classes to provide additional functionality, this way for instance the parameter grouping will not be repeated in
+  other classes.

@@ -176,6 +176,7 @@ class Converter(metaclass=abc.ABCMeta):
             The string representation of the object to be parsed.
         @param objType: class
             The type of object to which the string should be parsed.
+        @raise ValueError: In case the parsing was not successful.
         '''
         assert isinstance(strValue, str), 'Invalid string value %s' % strValue
         assert isclass(objType), 'Invalid object type %s' % objType
@@ -425,7 +426,7 @@ class Node(metaclass=abc.ABCMeta):
         @param converter: Converter
             The converter to be used in matching the provided path(s).
         @param paths: list
-            The path elements list, this list will get consume whenever a matching occurs.
+            The path elements list containing strings, this list will get consumed whenever a matching occurs.
         @return: Match|list|boolean
             If a match has occurred than a match or a list with match objects will be returned or True if there
             is no match to provide by this node, if not than None or False is returned.
