@@ -1,0 +1,2 @@
+- Make explain error handler processor use encoding processor thing by content type
+- Investigate about Connection: close/continue

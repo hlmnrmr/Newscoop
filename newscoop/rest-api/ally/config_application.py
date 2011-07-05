@@ -12,6 +12,7 @@ Provides the configurations for the web server.
 # --------------------------------------------------------------------
 import logging
 from ally.core.impl.processor.parameters import ParametersHandler
+from ally.core.impl.processor.explain_error import ExplainErrorHandler
 
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.WARN)
 from ally.core import util
@@ -83,6 +84,9 @@ uri.converter = converterPath
 uri.domain = 'http://localhost/'
 initialize(uri)
 
+explerrhand = ExplainErrorHandler()
+initialize(explerrhand)
+
 parameters = ParametersHandler()
 parameters.converter = converterPath
 initialize(parameters)
@@ -99,7 +103,7 @@ renderingHandler = RenderingHandler()
 renderingHandler.renders = renders
 initialize(renderingHandler)
 
-processors = [uri, parameters, invokingHandler, encoding, renderingHandler]
+processors = [explerrhand, uri, parameters, invokingHandler, encoding, renderingHandler]
 
 # --------------------------------------------------------------------
 # Creating the server processors container
