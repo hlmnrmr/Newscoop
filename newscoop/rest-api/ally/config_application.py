@@ -95,8 +95,8 @@ uri.converter = converterPath
 uri.netloc = 'localhost'
 initialize(uri)
 
-explerrhand = ExplainErrorHandler()
-initialize(explerrhand)
+explainErrorHandler = ExplainErrorHandler()
+initialize(explainErrorHandler)
 
 parameters = ParametersHandler()
 parameters.decoders = [encDecPrimitives, encDecQuery]
@@ -118,7 +118,7 @@ renderingHandler = RenderingHandler()
 renderingHandler.renders = renders
 initialize(renderingHandler)
 
-processors = [explerrhand, uri, parameters, invokingHandler, encoding, renderingHandler]
+processors = [explainErrorHandler, uri, parameters, invokingHandler, encoding, renderingHandler]
 
 # --------------------------------------------------------------------
 # Creating the server processors container
