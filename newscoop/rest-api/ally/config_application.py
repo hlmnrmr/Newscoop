@@ -14,6 +14,7 @@ import logging
 from ally.core.impl.processor.parameters import ParametersHandler
 from ally.core.impl.encdec_params import EncDecPrimitives, EncDecQuery
 from ally.core.impl.processor.hinting import HintingHandler
+from ally.core.impl.processor.explain_error import ExplainErrorHandler
 
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.WARN)
 #logging.basicConfig(level=logging.DEBUG)
@@ -94,6 +95,9 @@ uri.converter = converterPath
 uri.netloc = 'localhost'
 initialize(uri)
 
+explerrhand = ExplainErrorHandler()
+initialize(explerrhand)
+
 parameters = ParametersHandler()
 parameters.decoders = [encDecPrimitives, encDecQuery]
 initialize(parameters)
@@ -114,7 +118,7 @@ renderingHandler = RenderingHandler()
 renderingHandler.renders = renders
 initialize(renderingHandler)
 
-processors = [uri, parameters, hintingHandler, invokingHandler, encoding, renderingHandler]
+processors = [explerrhand, uri, parameters, invokingHandler, encoding, renderingHandler]
 
 # --------------------------------------------------------------------
 # Creating the server processors container
