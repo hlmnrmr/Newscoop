@@ -8,6 +8,7 @@ Created on Jun 28, 2011
 
 Module containing specifications for the server processing.
 '''
+
 from collections import deque
 from ally.core.api.type import Type
 from ally.core.internationalization import Message
@@ -122,7 +123,7 @@ INSERT = 2
 UPDATE = 4
 DELETE = 8
 
-@guard
+@guard(allow='method')
 class Request:
     '''
     Maps a request object based on a request path and action.

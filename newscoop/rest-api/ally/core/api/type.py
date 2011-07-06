@@ -218,7 +218,7 @@ class Iter(Type):
         '''
         @see: Type.isValid
         '''
-        if isinstance(list, Iterator):
+        if isinstance(list, Iterator) or isinstance(list, Iterable):
             return True
         return False
     

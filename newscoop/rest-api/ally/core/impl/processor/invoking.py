@@ -10,12 +10,14 @@ Provides the invoking handler.
 '''
 
 from ally.core.internationalization import msg as _
-from ally.core.spec.codes import NOT_AVAILABLE, INTERNAL_ERROR
+from ally.core.spec.codes import NOT_AVAILABLE, INTERNAL_ERROR, \
+    RESOURCE_NOT_FOUND
 from ally.core.spec.resources import Path, Node, Invoker
 from ally.core.spec.server import Processor, ProcessorsChain, RequestResource, \
     RequestRender, Response, INSERT, UPDATE, DELETE, GET
 import logging
 import traceback
+from ally.core.api.exception import InputException
 
 # --------------------------------------------------------------------
 
@@ -69,6 +71,10 @@ class InvokingHandler(Processor):
                     requestRender = RequestRender(requestResource, model, invoker.outputType)
                     log.debug('Successful obtained model from invoker %s with values %s', invoker, args)
                     chain.process(requestRender, responseAny)
+                except InputException as e:
+                    response.setCode(RESOURCE_NOT_FOUND, e.message)
+                    log.info('Input exception: %s', e.message.default)
+                    return
                 except:
                     response.setCode(INTERNAL_ERROR, _('Upps, it seems I am in a pickle'))
                     log.error('An exception occurred while trying to invoke %s with values %s', \

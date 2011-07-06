@@ -22,7 +22,7 @@ class Publication(Entity):
     Provides the publication model.
     '''
     Name = str
-    
+
 # --------------------------------------------------------------------
 
 @query(Publication)

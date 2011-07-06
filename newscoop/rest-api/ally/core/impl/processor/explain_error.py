@@ -4,15 +4,16 @@ Created on Jun 28, 2011
 @package: Newscoop
 @copyright: 2011 Sourcefabric o.p.s.
 @license: http://www.gnu.org/licenses/gpl-3.0.txt
-@author: Gabriel Nistor
+@author: Mihai Balaceanu
 
-Provides the URI request path handler.
+Provides support for explaining the errors in the content of the request.
 '''
 
+from _abcoll import Callable
+from ally.core.spec.content_type import XML
 from ally.core.spec.server import Request, Response, Processor, ProcessorsChain
 from ally.core.util import injected
 import logging
-from _abcoll import Callable
 
 # --------------------------------------------------------------------
 
@@ -58,7 +59,7 @@ class ExplainErrorDispatch:
     def __call__(self):
         resp = self.response
         assert isinstance(resp, Response)
-        resp.setContentType(resp.contentType)
+        resp.setContentType(resp.contentType or XML)
         # ending headers here!
         out = self.dispatch()
         if not self.response.code.isSuccess :

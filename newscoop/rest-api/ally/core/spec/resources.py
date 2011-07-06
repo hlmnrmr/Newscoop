@@ -166,7 +166,7 @@ class Converter(metaclass=abc.ABCMeta):
             return self.convertInt(objValue)
         if isinstance(objValue, numbers.Number):
             return self.convertInt(objValue)
-        raise AssertionError('Invalid object value %s' % objValue)
+        raise AssertionError('Invalid object value %s of type %s' % (objValue, objValue.__class__))
         
     def asValue(self, strValue, objType):
         '''

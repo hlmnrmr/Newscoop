@@ -21,6 +21,9 @@ import logging
 
 log = logging.getLogger(__name__)
 
+PROPERTY_PREFIX = '_prop'
+# The prefix used to append for property attributes.
+
 # --------------------------------------------------------------------
 
 @guard
@@ -76,7 +79,7 @@ class Property:
         self.type = type
         self.name = name
         # The name of the attributes that are placed in the model automatically.
-        self._var = 'prop_' + name
+        self._var = PROPERTY_PREFIX + name
     
     def get(self, model):
         '''

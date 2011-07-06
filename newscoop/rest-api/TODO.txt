@@ -3,3 +3,4 @@
   for instance a OrderCriteriaHandler, SimpleCriteriaHandler ... Also the arguments and parameters might be wrapped
   in classes to provide additional functionality, this way for instance the parameter grouping will not be repeated in
   other classes.
+ - make an HTML presenter for the REST.

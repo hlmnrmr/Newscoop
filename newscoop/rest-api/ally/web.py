@@ -9,7 +9,6 @@ Created on Jul 1, 2011
 Provides the web server.
 '''
 
-from ally import config_application
 from ally.core.spec.codes import Code
 from ally.core.spec.server import Response, Processors, ProcessorsChain, GET, \
     INSERT, UPDATE, DELETE, Request
@@ -83,16 +82,16 @@ class RequestHandler(BaseHTTPRequestHandler):
         
 # --------------------------------------------------------------------
 
-def main():
-    RequestHandler.processors = config_application.serverProcessors
+port = 80
+# To be injected before setup, provides the port of the server.
+
+def run():
     try:
-        server = HTTPServer(('', 80), RequestHandler)
-        print('started HTTP server...')
+        server = HTTPServer(('', port), RequestHandler)
+        print('Started HTTP REST API server...')
         server.serve_forever()
     except KeyboardInterrupt:
         print('^C received, shutting down server')
         server.socket.close()
 
-if __name__ == '__main__':
-    main()
     
