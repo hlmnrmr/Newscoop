@@ -11,23 +11,24 @@ Provides the configurations for the web server.
 
 # --------------------------------------------------------------------
 
-from ally.core.util import initialize
+from ally import web
 from ally.core.impl import assembler
 from ally.core.impl.converter import Standard
+from ally.core.impl.encdec_params import EncDecPrimitives, EncDecQuery
 from ally.core.impl.encoder import EncoderXMLFactory
 from ally.core.impl.processor.encoding import EncodingHandler
+from ally.core.impl.processor.explain_error import ExplainErrorHandler
+from ally.core.impl.processor.hinting import HintingHandler
 from ally.core.impl.processor.invoking import InvokingHandler
+from ally.core.impl.processor.parameters import ParametersHandler
 from ally.core.impl.processor.rendering import RenderingHandler
 from ally.core.impl.processor.uri import URIHandler
-from ally.core.impl.render import RenderListPath, RenderListIds, RenderModel
+from ally.core.impl.render import RenderListPath, RenderListIds, RenderModel, \
+    RenderListModels
 from ally.core.impl.resources_manager import ResourcesManagerImpl
 from ally.core.spec.presenting import Renders
 from ally.core.spec.server import Processors
-from ally.core.impl.processor.parameters import ParametersHandler
-from ally.core.impl.encdec_params import EncDecPrimitives, EncDecQuery
-from ally.core.impl.processor.hinting import HintingHandler
-from ally.core.impl.processor.explain_error import ExplainErrorHandler
-from ally import web
+from ally.core.util import initialize, IoCResources
 
 # --------------------------------------------------------------------
 
@@ -42,19 +43,22 @@ serviceConfigModule = None
 
 # ------------------------------------------------------------------------
 
-def setup(**rsc):
+def setup(rsc):
+    assert isinstance(rsc, IoCResources)
     # --------------------------------------------------------------------
     #  Creating the resource manager
     resourcesManager = ResourcesManagerImpl()
-    resourcesManager.assemblers = [assembler.AssembleGetAll(), assembler.AssembleGetById()]
+    resourcesManager.assemblers = [assembler.AssembleGetAll(), assembler.AssembleGetById(),
+                                   assembler.AssembleInsert(), assembler.AssembleUpdateIdModel(),
+                                   assembler.AssembleUpdateModel(), assembler.AssembleDelete()]
     
     # --------------------------------------------------------------------
     # Creating the resource manager
     if serviceConfigModule is None:
         raise AssertionError('No services configuration module provided, set on "config_web.serviceConfigModule"' + \
                              ' the configuration module that provides the services')
-    servicesRsc = serviceConfigModule.setup(**locals())
-    resourcesManager.services = servicesRsc['services']
+    serviceConfigModule.setup(rsc.add(**locals()))
+    resourcesManager.services = rsc['services']
     initialize(resourcesManager)
     
     # --------------------------------------------------------------------
@@ -93,12 +97,15 @@ def setup(**rsc):
     renderListIds.resourcesManager = resourcesManager
     initialize(renderListIds)
     
+    renderListModels = RenderListModels()
+    initialize(renderListModels)
+    
     renderModel = RenderModel()
     renderModel.resourcesManager = resourcesManager
     initialize(renderModel)
     
     renders = Renders()
-    renders.renders = [renderListPath, renderListIds, renderModel]
+    renders.renders = [renderListPath, renderListIds, renderListModels, renderModel]
     
     # --------------------------------------------------------------------
     # Creating the processors used in handling the request
@@ -134,7 +141,8 @@ def setup(**rsc):
     renderingHandler.renders = renders
     initialize(renderingHandler)
     
-    processors = [explainErrorHandler, uri, parameters, invokingHandler, encoding, renderingHandler]
+    processors = [explainErrorHandler, uri, parameters, rsc['sessionOpen'], invokingHandler,
+                  parameters, encoding, renderingHandler, rsc['sessionClose']]
     
     # --------------------------------------------------------------------
     # Creating the server processors container
@@ -147,3 +155,4 @@ def setup(**rsc):
     
     # --------------------------------------------------------------------
 
+    rsc.add(**locals())

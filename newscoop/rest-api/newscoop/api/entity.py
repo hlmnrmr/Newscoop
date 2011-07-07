@@ -42,7 +42,9 @@ class IEntityFindService:
     @call(Entity, Entity.Id)
     def byId(self, id):
         '''
-        Provides the theme based on the theme id.
+        Provides the entity based on the id.
+        
+        @raise InputException: If the id is not valid. 
         '''
 
 # The Entity model will be replaced by the specific model when the API will be inherited.
@@ -52,12 +54,13 @@ class IEntityCRUDService:
     Provides the entity the CRUD services.
     '''
     
-    @call(bool, Entity)
+    @call(Entity.Id, Entity)
     def insert(self, entity):
         '''
         Insert the entity.
         
-        @return: True if the update is successful, false otherwise.
+        @return: The id of the entity
+        @raise InputException: If the entity is not valid. 
         '''
         
     @call(bool, Entity)

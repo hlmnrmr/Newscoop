@@ -80,11 +80,36 @@ class RenderListIds(Render):
                 path = self.resourcesManager.findShortPath(typeFor(typeProp.model.modelClass), typeProp)
                 for id in obj:
                     if path is None:
-                        encoder.put(name, id)
+                        encoder.put(name, id, typeProp)
                     else:
                         assert isinstance(path, Path)
                         path.update(id, typeProp)
-                        encoder.put(name, id, path)
+                        encoder.put(name, id, typeProp, path)
+                encoder.close()
+                return True
+        return False
+    
+class RenderListModels(Render):
+    '''
+    Renders the List type that contains Model's.
+    '''
+    tagListSufix = 'List'
+    # Will be appended at the end of the model name when rendering the list tag containing the list items.
+        
+    def render(self, obj, objType, encoder, renders):
+        '''
+        @see: Render.render
+        '''
+        assert isinstance(encoder, Encoder)
+        assert isinstance(renders, Renders)
+        if isinstance(objType, Iter):
+            assert isinstance(objType, Iter)
+            if isinstance(objType.itemType, TypeModel):
+                typeModel = objType.itemType
+                assert isinstance(typeModel, TypeModel)
+                encoder.open(typeModel.model.name + self.tagListSufix)
+                for model in obj:
+                    renders.render(model, typeModel, encoder)
                 encoder.close()
                 return True
         return False
@@ -112,7 +137,7 @@ class RenderModel(Render):
                 assert isinstance(prop, Property)
                 value = prop.get(obj)
                 if value is not None:
-                    encoder.put(prop.name, value)
+                    encoder.put(prop.name, value, prop.type)
             encoder.close()
             return True
         return False

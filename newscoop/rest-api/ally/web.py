@@ -52,7 +52,7 @@ class HTTPResponse(Response):
             if self.allows & DELETE != 0: allow.append('DELETE')
             if self.allows & INSERT != 0: allow.append('POST')
             if self.allows & UPDATE != 0: allow.append('PUT')
-            rq.send_header('Allow', ', '.join(self.allows))
+            rq.send_header('Allow', ', '.join(allow))
         msg = None
         if self.message is not None:
             msg = self.message.default
@@ -73,13 +73,25 @@ class RequestHandler(BaseHTTPRequestHandler):
     processors = Processors
 
     def do_GET(self):
+        self.process(Request(GET, self.path))
+    
+    def do_POST(self):
+        self.process(Request(INSERT, self.path))
+        
+    def do_PUT(self):
+        self.process(Request(UPDATE, self.path))
+        
+    def do_DELETE(self):
+        self.process(Request(DELETE, self.path))
+            
+    def process(self, request):
         chain = self.processors.newChain()
         assert isinstance(chain, ProcessorsChain)
         response = HTTPResponse(self)
-        chain.process(Request(GET, self.path), response)
+        chain.process(request, response)
         if not response.isDispatched:
             response.dispatch()
-        
+           
 # --------------------------------------------------------------------
 
 port = 80

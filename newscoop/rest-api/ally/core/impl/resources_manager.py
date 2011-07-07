@@ -46,7 +46,7 @@ class ResourcesManagerImpl(ResourcesManager):
             self.register(serviceFor(service), service)
     
     def register(self, service, implementation):
-        #TODO: there is still stiff to do here, for instance the implementation is not mandatory
+        #TODO: there is still stuff to do here, for instance the implementation is not mandatory
         # at this point.
         '''
         @see: ResourcesManager.register
@@ -59,7 +59,9 @@ class ResourcesManagerImpl(ResourcesManager):
         for asm in self.assemblers:
             asm.assemble(self._root, invokers)
         for invoker in invokers:
-            log.warning('The call %s could not be resolved in the node structure', invoker.call)
+            assert isinstance(invoker, InvokerCall)
+            log.warning('The service %s call %s could not be resolved in the node structure', \
+                        invoker.service, invoker.call)
 
     def findResourcePath(self, converter, paths):
         '''

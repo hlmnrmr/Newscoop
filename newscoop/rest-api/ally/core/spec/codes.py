@@ -41,5 +41,7 @@ UNKNOWN_PARAMS = Code(400, False) # HTTP code 400 Bad Request
 ILLEGAL_PARAM = Code(400, False) # HTTP code 400 Bad Request
 RESOURCE_NOT_FOUND = Code(404, False) # HTTP code 404 Not Found
 NOT_AVAILABLE = Code(405, False) # HTTP code 405 Method Not Allowed
+CANNOT_DELETE = Code(404, False) # HTTP code 404 Not Found
 
 RESOURCE_FOUND = Code(200, True) # HTTP code 200 OK
+DELETED_SUCCESS = Code(204, True) # HTTP code 204 No Content

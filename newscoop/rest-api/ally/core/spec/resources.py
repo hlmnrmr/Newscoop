@@ -40,10 +40,13 @@ class Path:
         self.matches = matches
         self.node = node
         
-    def toArguments(self):
+    def toArguments(self, invoker):
         '''
         Provides the list of arguments contained in this path.
+        In order to establish for how are the arguments an invoker needs to be provided.
         
+        @param invoker: Invoker
+            The invoker to construct arguments for.
         @return: dictionary
             Return the dictionary of arguments of this path the key is the name of the argument, can be empty list
             if there are no arguments.
@@ -51,7 +54,7 @@ class Path:
         args = {}
         for match in self.matches:
             assert isinstance(match, Match)
-            match.asArgument(args)
+            match.asArgument(invoker, args)
         return args
     
     def update(self, obj, objType):
@@ -255,10 +258,13 @@ class Match(metaclass=abc.ABCMeta):
         self.node = node
     
     @abc.abstractmethod
-    def asArgument(self, args):
+    def asArgument(self, invoker, args):
         '''
         Populates in the provided dictionary of arguments, the key represents the argument name.
+        In order to establish for how are the arguments an invoker needs to be provided.
         
+        @param invoker: Invoker
+            The invoker to construct arguments for.
         @param args: dictionary
             The dictionary where the argument(s) name and value(s) of this match will be populated.
         '''
@@ -305,7 +311,7 @@ class Match(metaclass=abc.ABCMeta):
         Needs to have the equal implemented.
         '''
 
-@guard
+@guard(allow='invoke')
 class Invoker(metaclass=abc.ABCMeta):
     '''
     Contains all the data required for accessing a call.

@@ -151,6 +151,26 @@ def injected(clazz):
     newClazz.__module__ = clazz.__module__
     return newClazz
 
+class IoCResources(dict):
+    '''
+    Provides a container for IoC resources.
+    '''
+    
+    def __init__(self, **keyargs):
+        super().__init__(**keyargs)
+        
+    def add(self, **resources):
+        '''
+        Add the resources to this container.
+        
+        @param resources: dictionary
+            The resources to be added.
+        @return: self
+            For chaining purposes.
+        '''
+        self.update(resources)
+        return self
+
 class Injected:
     '''
     Provides the support for classes that are injected.

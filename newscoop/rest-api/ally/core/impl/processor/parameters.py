@@ -15,7 +15,7 @@ from ally.core.spec.codes import ILLEGAL_PARAM, UNKNOWN_PARAMS
 from ally.core.spec.presenting import DecoderParams
 from ally.core.spec.resources import Node, Invoker
 from ally.core.spec.server import Processor, ProcessorsChain, RequestResource, \
-    Response, GET
+    Response, INSERT, UPDATE, DELETE
 from ally.core.util import injected
 import logging
 
@@ -28,7 +28,8 @@ log = logging.getLogger(__name__)
 @injected
 class ParametersHandler(Processor):
     '''
-    Implementation for a processor that provides the transformation of parameters into arguments, if this is required.
+    Implementation for a processor that provides the transformation of parameters into arguments, the parameters will
+    be parsed only for the GET method, for other methods will throw exception.
     '''
     
     decoders = list
@@ -45,13 +46,18 @@ class ParametersHandler(Processor):
         '''
         assert isinstance(chain, ProcessorsChain), 'Invalid processors chain %s' % chain
         response = self.findResponseIn(responseAny)
-        if isinstance(requestResource, RequestResource) and requestResource.request.method == GET \
-        and len(requestResource.parameters) > 0 and response is not None:
+        if isinstance(requestResource, RequestResource) and len(requestResource.parameters) > 0 \
+        and response is not None:
             assert isinstance(requestResource, RequestResource)
             assert isinstance(response, Response)
             node = requestResource.path.node
             assert isinstance(node, Node), \
             'The node has to be available in the path %s problems in previous processors' % requestResource.path
+            if requestResource.request.method in (INSERT, UPDATE, DELETE):
+                response.setCode(UNKNOWN_PARAMS, _('Illegal parameters: $1', \
+                                                       ', '.join([param[0] for param in requestResource.parameters])))
+                log.warning('Illegal method %s for parameters', requestResource.request.method)
+                return
             if node.get is not None:
                 invoker = node.get
                 assert isinstance(invoker, Invoker)

@@ -10,12 +10,24 @@ Provides the configurations for the services.
 '''
 from ally.core.tools.dummy import ServiceDummy
 from newscoop.api import resource, theme
-from newscoop.impl import tables_alchemy
-from newscoop.impl.publication_alchemy import PublicationServiceAlchemy
-from ally.core.util import initialize
 
-def setup(**rsc):
+from newscoop.impl_alchemy.publication import PublicationServiceAlchemy
+from ally.core.util import initialize, IoCResources
+from newscoop.impl_alchemy import AlchemyOpenSessionHandler, \
+    AlchemyCloseSessionHandler
+
+def setup(rsc):
+    assert isinstance(rsc, IoCResources)
     resourcesManager = rsc['resourcesManager']
+    # --------------------------------------------------------------------
+    # Creating the SQL Alchemy session processors
+    
+    sessionOpen = AlchemyOpenSessionHandler()
+    sessionOpen.engine = rsc['engine']
+    initialize(sessionOpen)
+    
+    sessionClose = AlchemyCloseSessionHandler()
+    
     # --------------------------------------------------------------------
     # Creating the services
     resourceService = ServiceDummy(resource.IResourceService)
@@ -23,8 +35,6 @@ def setup(**rsc):
     initialize(resourceService)
     
     publicationService = PublicationServiceAlchemy()
-    publicationService.db = tables_alchemy.db
-    publicationService.table = tables_alchemy.tablePublication
     initialize(publicationService)
     
     themeService = ServiceDummy(theme.IThemeService)
@@ -33,4 +43,6 @@ def setup(**rsc):
     
     services = [resourceService, publicationService, themeService]
     
-    return locals()
+    # --------------------------------------------------------------------
+    
+    rsc.add(**locals())

@@ -66,11 +66,12 @@ class ExplainErrorDispatch:
             log.debug('Error code received %s formating error content response', self.response.code.code)
             rqh = self.response.requestHandler
             rqh.wfile.write(
-                ('<?xml version="1.0"?>\
-                <error>\
-                <code>%(code)d</code>\
-                <message>%(message)s</message>\
-                </error>' % 
+                (
+'''<?xml version="1.0"?>
+<error>
+    <code>%(code)d</code>
+    <message>%(message)s</message>
+</error>''' % 
                 {'code': self.response.code.code, 'message': self.response.message.default})
                 .encode('UTF-8', 'replace'))
         return out

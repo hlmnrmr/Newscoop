@@ -43,7 +43,7 @@ class MatchString(Match):
         assert isinstance(matchValue, str), 'Invalid string match value %s' % matchValue
         self.matchValue = matchValue
     
-    def asArgument(self, args):
+    def asArgument(self, invoker, args):
         '''
         @see: Match.asArgument
         '''
@@ -93,13 +93,18 @@ class MatchId(Match):
         'Invalid match integer value %s, can be None' % matchValue
         self.matchValue = matchValue
     
-    def asArgument(self, args):
+    def asArgument(self, invoker, args):
         '''
         @see: Match.value
         '''
+        assert isinstance(invoker, Invoker), 'Invalid invoker %s' % invoker
         assert isinstance(args, dict), 'Invalid arguments dictionary %s' % args
         assert self.matchValue != None, 'This match %s has not value' % self
-        args[self.node.inputId.name] = self.matchValue
+        for inp in invoker.inputs:
+            assert isinstance(inp, Input)
+            if inp.type == self.node.typeId:
+                args[inp.name] = self.matchValue
+                return
     
     def update(self, obj, objType):
         '''
@@ -108,11 +113,11 @@ class MatchId(Match):
         assert isinstance(objType, Type), 'Invalid object type %s' % objType
         if isinstance(objType, TypeModel):
             assert isinstance(objType, TypeModel)
-            if objType.model == self.node.inputId.type.model:
-                self.matchValue = self.node.inputId.type.property.get(obj)
+            if objType.model == self.node.typeId.model:
+                self.matchValue = self.node.typeId.property.get(obj)
                 return True
         elif isinstance(objType, TypeProperty):
-            if objType == self.node.inputId.type:
+            if objType == self.node.typeId:
                 self.matchValue = obj
                 return True
         return False
@@ -229,20 +234,19 @@ class NodeId(Node):
     @see: Node
     '''
     
-    def __init__(self, parent, inputId):
+    def __init__(self, parent, typeId):
         '''
         @see: Node.__init__
         
-        @param inputId: Input
-            The input with type property represented by the node.
+        @param type: TypeProperty
+            The type property id represented by the node.
         '''
-        assert isinstance(inputId, Input), 'Invalid input %s' % inputId
-        assert isinstance(inputId.type, TypeProperty), 'Invalid input type property %s' % inputId.type
-        assert isinstance(inputId.type.property.type, TypeId), \
-        'Invalid property type %s needs to be a type id' % inputId.type.property.type
-        assert inputId.type.forClass() == int, \
-        'Invalid type id class %s needs to be integer' % inputId.type.forClass()
-        self.inputId = inputId
+        assert isinstance(typeId, TypeProperty), 'Invalid type property %s' % typeId
+        assert isinstance(typeId.property.type, TypeId), \
+        'Invalid property type %s needs to be a type id' % typeId.property.type
+        assert typeId.forClass() == int, \
+        'Invalid type id class %s needs to be integer' % typeId.forClass()
+        self.typeId = typeId
         super().__init__(parent, ORDER_INTEGER)
 
     def tryMatch(self, converter, paths):
@@ -267,8 +271,8 @@ class NodeId(Node):
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            return self.inputId == other.inputId
+            return self.typeId == other.typeId
         return False
 
     def __str__(self):
-        return '<%s[%s]>' % (simpleName(self), self.inputId)
+        return '<%s[%s]>' % (simpleName(self), self.typeId)

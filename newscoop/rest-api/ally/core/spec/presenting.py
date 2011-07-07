@@ -124,14 +124,16 @@ class Encoder(metaclass=abc.ABCMeta):
         '''
     
     @abc.abstractmethod
-    def put(self, name, value=None, path=None):
+    def put(self, name, value=None, type=None, path=None):
         '''
         Encode the name value pair.
         
         @param name: string
             The name of the element.
         @param value: object
-            The element value to encode, the type is mostly depended on the encoder implementation.
+            The element value to encode, the accepted type is mostly depended on the encoder implementation.
+        @param type: Type
+            The type of the value.
         @param path: Path
             A path linking the element.
         '''

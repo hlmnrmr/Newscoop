@@ -117,7 +117,7 @@ class EncoderXMLIndented(EncoderBase):
         super().__init__(out, encoderPath, factory)
         self._indent = ''
     
-    def put(self, name, value=None, path=None):
+    def put(self, name, value=None, type=None, path=None):
         '''
         @see: Encoder.put
         '''

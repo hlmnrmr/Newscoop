@@ -449,27 +449,29 @@ class APIService(Callable):
             The extended service class if is the case, the service class is forced to extend the Service support.
         '''
         calls = _processAPICalls(serviceClass)
-        service = serviceFor(serviceClass)
-        if service is None:
+        parentServices = (serviceFor(parent) for parent in serviceClass.__bases__)
+        parentServices = [service for service in parentServices if service is not None] 
+        if len(parentServices) == 0:
             # this is not an extended service
             assert not len(calls) == 0, 'There are no API calls on service class %s' % calls
             service = Service(propertiesFor(self.modelClass), serviceClass, calls)
         else:
-            assert isinstance(service, Service)
-            model = propertiesFor(self.modelClass)
-            assert isinstance(model, Model), 'Invalid model %s' % model
-            if self.modelClass is not service.model.modelClass \
-            and issubclass(self.modelClass, service.model.modelClass):
-                log.info('Detected generic inheritance from model %s to model %s', \
-                         service.model.modelClass, self.modelClass)
-                allCalls = {}
-                for name, call in service.calls.items():
-                    if name not in calls:
-                        allCalls[name] = _processCallGeneric(call, service.model, model)
-                    else:
-                        allCalls[name] = call
-            else:
-                allCalls = dict(service.calls)
+            allCalls = {}
+            for parent in parentServices:
+                assert isinstance(parent, Service)
+                model = propertiesFor(self.modelClass)
+                assert isinstance(model, Model), 'Invalid model %s' % model
+                if self.modelClass is not parent.model.modelClass \
+                and issubclass(self.modelClass, parent.model.modelClass):
+                    log.info('Detected generic inheritance from model %s to model %s', \
+                             parent.model.modelClass, self.modelClass)
+                    for name, call in parent.calls.items():
+                        if name not in calls:
+                            allCalls[name] = _processCallGeneric(call, parent.model, model)
+                        else:
+                            allCalls[name] = call
+                else:
+                    allCalls.update(parent.calls)
             allCalls.update(calls)
             service = Service(model, serviceClass, allCalls)
         serviceFor(serviceClass, service)
