@@ -151,26 +151,6 @@ def injected(clazz):
     newClazz.__module__ = clazz.__module__
     return newClazz
 
-class IoCResources(dict):
-    '''
-    Provides a container for IoC resources.
-    '''
-    
-    def __init__(self, **keyargs):
-        super().__init__(**keyargs)
-        
-    def add(self, **resources):
-        '''
-        Add the resources to this container.
-        
-        @param resources: dictionary
-            The resources to be added.
-        @return: self
-            For chaining purposes.
-        '''
-        self.update(resources)
-        return self
-
 class Injected:
     '''
     Provides the support for classes that are injected.
@@ -195,15 +175,6 @@ class Injected:
         Method called by the IoC, after the properties finalizations.
         We will validate the object types that are found as class attributes and contain classes.
         '''
-        for name, value in self.__class__.__dict__.items():
-            if isclass(value) and not name.startswith('_'):
-                inject = getattr(self, name, None)
-                if inject is None:
-                    raise AssertionError('There is no value injected for (%s) on class %s' % \
-                                         (name, simpleName(self)))
-                elif not isinstance(inject, value):
-                    raise AssertionError('Invalid inject value %s for name (%s) on class %s' % \
-                                         (inject, name, simpleName(self)))
         args, keyargs = self._arguments
         super().__init__(*args, **keyargs)
 
@@ -252,6 +223,24 @@ def withPrivate(mainClass):
         self.private = self
 
     return type(mainClass.__name__, (mainClass, privateClass), {'__init__': __init__})
+
+# --------------------------------------------------------------------
+
+def findInValues(dictionary, value):
+    '''
+    Searches in the provided dictionary the value as an entry in the dictionary values.
+    
+    @param dictionary: dictionary
+        The dictionary to search the values.
+    @param value: object
+        The value to search in the dictionary values.
+    @return: key|None
+        Either the found key, or None.
+    '''
+    assert isinstance(dictionary, dict), 'Invalid dictionary %s' % dictionary
+    for key, values in dictionary.items():
+        if value in values:
+            return key
 
 # --------------------------------------------------------------------
 
@@ -339,8 +328,10 @@ def _isSuperCall(obj):
     if not isclass(obj):
         obj = obj.__class__
     calframe = inspect.getouterframes(inspect.currentframe(), 2)
-    locals = calframe[2][0].f_locals
-    if 'self' in locals:
-        return isinstance(locals['self'], obj)
+    for k in range(2, len(calframe)):
+        locals = calframe[k][0].f_locals
+        if 'self' in locals:
+            if isinstance(locals['self'], obj):
+                return True
     return False
     

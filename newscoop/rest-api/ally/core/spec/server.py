@@ -9,16 +9,11 @@ Created on Jun 28, 2011
 Module containing specifications for the server processing.
 '''
 
-from collections import deque
-from ally.core.api.type import Type
 from ally.core.internationalization import Message
-from ally.core.spec.charset import CharSet
 from ally.core.spec.codes import Code
-from ally.core.spec.content_type import ContentType
-from ally.core.spec.resources import Path
-from ally.core.util import guard, injected
+from ally.core.util import guard, injected, Singletone
+from collections import deque
 import abc
-from ally.core.spec.presenting import EncoderPath
 
 # --------------------------------------------------------------------
 
@@ -33,29 +28,13 @@ class Processor(metaclass=abc.ABCMeta):
         '''
         Processes the filtering, the processor has the duty to proceed by calling the chain.
         
-        @param request: object
+        @param request: Request
             The request to be processed.
-        @param response: object
+        @param response: Response
             The response to be processed.
         @param chain: ProcessorsChain
             The chain to call the next processors.
         '''
-        
-    def findResponseIn(self, response):
-        '''
-        Finds the Response instance for the provided response object. This class actually tries the response even
-        if the response is encapsulated in within another response type object.
-        
-        @param response: object
-            The response object in which to find the Response.
-        @return: Response|None
-            The Response instance or None if no response could be located. 
-        '''
-        if isinstance(response, Response):
-            return response
-        if isinstance(response, ResponseFormat):
-            return response.response
-        return None
 
 @guard
 class ProcessorsChain:
@@ -103,6 +82,7 @@ class Processors:
     # The list of processors that compose this container.
     
     def __init__(self):
+        assert isinstance(self.processors, list), 'Invalid processors list %s' % self.processors
         if __debug__:
             for processor in self.processors:
                 assert isinstance(processor, Processor), 'Invalid processor %s' % processor
@@ -117,48 +97,118 @@ class Processors:
         return ProcessorsChain(self.processors)
         
 # --------------------------------------------------------------------
+
+@guard
+class Content(metaclass=abc.ABCMeta):
+    '''
+    Provides the content of a request.
+    '''
+    
+    def __init__(self, isAvaliable, contentType=None, charSet=None):
+        '''
+        Constructs the content instance.
+        
+        @param isAvaliable: boolean
+            Flag indicating that there is content available.
+        @param contentType: string|None
+            The content type for the content if known.
+        @param charSet: string|None
+            The character set of the content if known.
+        '''
+        assert isinstance(isAvaliable, bool), 'Invalid available flag %s' % isAvaliable
+        assert contentType is None or isinstance(contentType, str), 'Invalid content type %s' % contentType
+        assert charSet is None or isinstance(charSet, str), 'Invalid character set %s' % charSet
+        self.isAvaliable = isAvaliable
+        self.contentType = contentType
+        self.charSet = charSet
+    
+    @abc.abstractmethod
+    def read(self, nbytes=None):
+        '''
+        Reads nbytes from the content, attention the content can be read only once.
+        
+        @param nbytes: integer|None
+            The number of bytes to read, or None to read all remaining available bytes from the content.
+        '''
+        
+class ContentNone(Singletone, Content):
+    '''
+    Singletone class that provides a not available content type implementation.
+    '''
+    
+    def __init__(self):
+        Content.__init__(self, False)
+        
+    def read(self, nbytes=None):
+        '''
+        @see: Content.read
+        '''
+        raise AssertionError('No content available')
+    
+class ContentOnFile(Content):
+    '''
+    Implementation for content that provides data from a file. A file means any object that has the 'read(nbytes)'
+    method.
+    '''
+    
+    def __init__(self, file, length=None, contentType=None, charSet=None):
+        '''
+        @see: Content.__init__
+        
+        @param file: object
+            The object with the 'read(nbytes)' method to provide the content bytes.
+        @param length: integer|None
+            The number of available bytes in the content, if None it means that is not known.
+        '''
+        assert file is not None and getattr(file, 'read') is not None, 'Invalid file object %s' % file
+        assert length is None or isinstance(length, int), 'Invalid length %s, can be None' % length
+        super().__init__(True, contentType, charSet)
+        self.file = file
+        self.length = length
+        self._offset = 0
+        
+    def read(self, nbytes=None):
+        '''
+        @see: Content.read
+        '''
+        count = nbytes
+        if self.length is not None:
+            if self._offset >= self.length:
+                return ''
+            delta = self.length - self._offset
+            if count is None:
+                count = delta
+            elif count > delta:
+                count = delta
+        bytes = self.file.read(count)
+        self._offset += len(bytes)
+        return bytes
+
+# --------------------------------------------------------------------
 # The available request methods.
 GET = 1
 INSERT = 2
 UPDATE = 4
 DELETE = 8
 
-@guard(allow='method')
 class Request:
     '''
     Maps a request object based on a request path and action.
     '''
     
-    def __init__(self, method, requestPath):
+    def __init__(self):
         '''
-        Constructs the request.
-        
-        @param requestPath: string
-            The requested path.
-        @param method: integer
+        @ivar method: integer
             The method of the request, can be one of GET, INSERT, UPDATE or DELETE constants in this module.
-        '''
-        assert isinstance(method, int), \
-        'Invalid method %s, needs to be one of the integer defined request methods' % method
-        assert isinstance(requestPath, str), 'Invalid request path %s' % requestPath
-        self.method = method
-        self.requestPath = requestPath
-
-@guard
-class RequestResource:
-    '''
-    Provides the requested resource data.
-    '''
-    
-    def __init__(self, request, path, parameters):
-        '''
-        Constructs the resource request.
-        
-        @param request: Request
-            The request that this resource request is based on.
-        @param path: Path
+        @ivar accContentTypes: list
+            The content types accepted for response
+        @ivar accCharSets: list
+            The character sets accepted for response
+        @ivar content: Content
+            The content provider for the request.
+        @ivar resourcePath: Path
             The path to the resource node.
-        @param params: list
+        @ivar params: list
             A list of tuples containing on the first position the parameter string name and on the second the string
             parameter value as provided in the request path. The parameters need to be transformed into arguments
             and also removed from this list while doing that.
@@ -167,47 +217,23 @@ class RequestResource:
         @ivar arguments: dictionary
             A dictionary containing as a key the argument name, this dictionary needs to be populated by the 
             processors as seen fit, also the parameters need to be transformed to arguments.
-        '''
-        assert isinstance(request, Request), 'Invalid request %s' % request
-        assert isinstance(path, Path), 'Invalid resource path %s' % path
-        assert isinstance(parameters, list), 'Invalid parameters list %s' % parameters
-        if __debug__:
-            for param in parameters:
-                assert isinstance(param, tuple), 'Invalid parameter %s, needs to be a tuple' % param
-                assert len(param) == 2, 'Invalid parameter %s, needs to have two elements' % param
-                assert isinstance(param[0], str) and isinstance(param[1], str), \
-                'Invalid parameter %s, needs to contain only strings' % param
-        self.request = request
-        self.path = path
-        self.parameters = parameters
-        self.arguments = {}
-
-@guard
-class RequestRender:
-    '''
-    Provides the request for rendering the response based on the provided object and object type. 
-    '''
-    
-    def __init__(self, requestResource, obj, objType):
-        '''
-        Constructs the render request.
-        
-        @param requestResource: RequestResource
-            The request resource that generated the render request.
-        @param obj: object
+        @ivar obj: object
             The object to be rendered.
-        @param objType: Type
+        @ivar objType: Type
             The type of the object to be rendered.
         '''
-        assert isinstance(requestResource, RequestResource), 'Invalid resource request %s' % requestResource
-        assert isinstance(objType, Type), 'Invalid object type %s' % objType
-        self.requestResource = requestResource
-        self.obj = obj
-        self.objType = objType
-    
+        self.method = None
+        self.accContentTypes = None
+        self.accCharSets = None
+        self.content = None
+        self.resourcePath = None
+        self.params = None
+        self.arguments = None
+        self.obj = None
+        self.objType = None
+
 # --------------------------------------------------------------------
 
-@guard
 class Response(metaclass=abc.ABCMeta):
     '''
     Provides the response support.
@@ -215,8 +241,6 @@ class Response(metaclass=abc.ABCMeta):
     
     def __init__(self):
         '''
-        Constructs the response. 
-        
         @ivar code: Code
             The code of the response, do not update this directly use a one of the methods.
         @ivar message: Message
@@ -225,34 +249,22 @@ class Response(metaclass=abc.ABCMeta):
             The character set for the response, do not update this directly use a one of the methods.
         @ivar contentType: string
             The content type for the response, do not update this directly use a one of the methods.
+        @ivar allows: integer
+            Contains the allow flags for the methods.
+        @ivar encoderPath: EncoderPath
+            The path encoder used for encoding paths that will be rendered in the response.
+        @ivar encoder: Encoder
+            The encoder used for encoding the content of the response.
         '''
         self.code = None
         self.message = None
         self.charSet = None
         self.contentType = None
         self.allows = 0
+        self.encoderPath = None
+        self.encoder = None
     
-    def setCharSet(self, charSet):
-        '''
-        Sets to the response header the content character set.
-        
-        @param charSet: CharSet
-            The character set for the response.
-        '''
-        assert isinstance(charSet, CharSet), 'Invalid character set %s' % charSet
-        self.charSet = charSet
-    
-    def setContentType(self, contentType):
-        '''
-        Sets to the response header the content type.
-        
-        @param contentType: ContentType
-            The content type format.
-        '''
-        assert isinstance(contentType, ContentType), 'Invalid content type %s' % contentType
-        self.contentType = contentType
-    
-    def setAllows(self, method):
+    def addAllows(self, method):
         '''
         Set the status of allowing get method. 
         
@@ -263,7 +275,7 @@ class Response(metaclass=abc.ABCMeta):
         'Invalid method %s, needs to be one of the integer defined request methods' % method
         self.allows |= method
 
-    def setCode(self, code, message=None):
+    def setCode(self, code, message):
         '''
         Sets the provided code.
         
@@ -273,7 +285,7 @@ class Response(metaclass=abc.ABCMeta):
             The message to send in relation to the code.
         '''
         assert isinstance(code, Code), 'Invalid code %s' % code
-        assert message is None or isinstance(message, Message), 'Invalid message %s' % message
+        assert isinstance(message, Message), 'Invalid message %s' % message
         self.code = code
         self.message = message
 
@@ -286,27 +298,3 @@ class Response(metaclass=abc.ABCMeta):
         @return: object 
             A writer object that has a 'write' method, used for outputting the content.
         '''
-
-@guard
-class ResponseFormat:
-    '''
-    Maps the response with an additional encoder path. 
-    '''
-    
-    def __init__(self, response, encoderPath, format):
-        '''
-        Constructs the response encoder path.
-        
-        @param response: Response
-            The response that this response encoder path is based on.
-        @param encoderPath: EncoderPath
-            The path encoder used for encoding paths that will be rendered in the response.
-        @param format: string|None
-            The requested format for the resource.
-        '''
-        assert isinstance(response, Response), 'Invalid response %s' % response
-        assert isinstance(encoderPath, EncoderPath), 'Invalid path encoder %s' % encoderPath
-        assert format is None or isinstance(format, str), 'Invalid format name %s' % format
-        self.response = response
-        self.encoderPath = encoderPath
-        self.format = format

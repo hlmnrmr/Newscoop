@@ -38,6 +38,8 @@ class ResourcesManagerImpl(ResourcesManager):
     # The list of services to be registered, the list contains the service instance.
 
     def __init__(self):
+        assert isinstance(self.assemblers, list), 'Invalid assemblers list %s' % self.assemblers
+        assert isinstance(self.services, list), 'Invalid services list %s' % self.services
         if __debug__:
             for asm in self.assemblers:
                 assert isinstance(asm, Assembler), 'Invalid assembler %s' % asm

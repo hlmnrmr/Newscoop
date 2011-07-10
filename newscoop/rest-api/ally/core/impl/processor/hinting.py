@@ -11,7 +11,7 @@ Provides hints in the encoded paths.
 
 from ally.core.spec.presenting import EncoderPath, EncoderParams
 from ally.core.spec.resources import Path, Node, Invoker
-from ally.core.spec.server import Processor, ProcessorsChain, ResponseFormat
+from ally.core.spec.server import Processor, ProcessorsChain, Response
 from ally.core.util import injected
 import logging
 
@@ -31,22 +31,19 @@ class HintingHandler(Processor):
     # The parameters encoders used for adding parameters to the path.
    
     def __init__(self):
+        assert isinstance(self.encoders, list), 'Invalid encoders list %s' % self.encoders
         if __debug__:
             for encoder in self.encoders:
                 assert isinstance(encoder, EncoderParams), 'Invalid parameters encoder %s' % encoder
     
-    def process(self, requestAny, responseFormat, chain):
+    def process(self, req, rsp, chain):
         '''
         @see: Processor.process
         '''
         assert isinstance(chain, ProcessorsChain), 'Invalid processors chain %s' % chain
-        if isinstance(responseFormat, ResponseFormat):
-            assert isinstance(responseFormat, ResponseFormat)
-            hinter = EncoderPathHinter(responseFormat.encoderPath, self)
-            responseHinter = ResponseFormat(responseFormat.response, hinter, responseFormat.format)
-            chain.process(requestAny, responseHinter)
-        else:
-            chain.process(requestAny, responseFormat)
+        assert isinstance(rsp, Response), 'Invalid response %s' % rsp
+        rsp.encoderPath = EncoderPathHinter(rsp.encoderPath, self)
+        chain.process(req, rsp)
 
 # --------------------------------------------------------------------
 

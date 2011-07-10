@@ -10,7 +10,6 @@ Module containing specifications for the presenting of resources.
 '''
 
 from ally.core.api.type import Type
-from ally.core.spec.content_type import ContentType
 from ally.core.util import guard, injected
 import abc
 
@@ -41,6 +40,12 @@ class DecoderParams(metaclass=abc.ABCMeta):
             The dictionary {arg name:arg value} that will be populated with the obtained argument values.
         @raise InputException: Thrown if a parameter does not contain the right value. 
         '''
+
+class Decoder(metaclass=abc.ABCMeta):
+    '''
+    Provides the decoding for received data objects.
+    '''
+    
 
 # --------------------------------------------------------------------
 
@@ -153,34 +158,15 @@ class EncoderFactory(metaclass=abc.ABCMeta):
     Factory for providing encoders.
     '''
     
-    def __init__(self, contentType):
-        '''
-        Constructs the encoder path.
-        
-        @param contentType: ContentType
-            The content type of the encoder factory.
-        '''
-        assert isinstance(contentType, ContentType), 'Invalid content type %s' % contentType
-        self.contentType = contentType
-    
     @abc.abstractmethod
-    def isValidFormat(self, format):
-        '''
-        Checks if the provided format is valid for this encoder factory.
-        
-        @param format: object
-            The format desired.
-        '''
-    
-    @abc.abstractmethod
-    def createEncoder(self, encoderPath, out):
+    def createEncoder(self, response, out):
         '''
         Creates an encoder specific for this path encoder for the provided output.
         
-        @param encoderPath: EncoderPath
-            The path encoder that will be used by the encoder to code the paths.
-        @param out: Callable
-            The output Callable used for writing content.
+        @param response: Response
+            The response for which the encoder has to be created.
+        @param out: object
+            A writer object that has a 'write' method, used for outputting the content.
         @return: Encoder
             The new encoder.
         '''
@@ -221,6 +207,7 @@ class Renders:
     # The list of render objects.
     
     def __init__(self):
+        assert isinstance(self.renders, list), 'Invalid renders list %s' % self.renders
         if __debug__:
             for render in self.renders:
                 assert isinstance(render, Render), 'Invalid renderer %s' % render

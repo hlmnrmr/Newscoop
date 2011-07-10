@@ -10,36 +10,11 @@ Provides the exceptions that are used in communicating issues in the API.
 The internal errors (the ones that are made by the implementation and not data) are AssertionError.
 '''
 
-from ally.core.internationalization import Message
-from ally.core.util import guard
+from ally.core.internationalization import MessageException
 
 # --------------------------------------------------------------------
 
-@guard
-class APIException(Exception):
-    '''
-    Provides the exception that are targeted to reach the API communication.
-    So basically this type of exception will be propagated to the client.
-    '''
-
-    def __init__(self, message):
-        '''
-        Initializes the exception based on the message which will be used as a key.
-        
-        @param msg: string
-            The message (that is in English) to be used as a key, this message
-            has to contain as many place holders (ex: $1, $2 ...) as there are 
-            arguments.
-        @param *args: list 
-            The arguments to be used instead of the place holders in the message.
-        '''
-        assert isinstance(message, Message), 'Invalid message %s' % message
-        self.message = message
-        super().__init__(message.default)
-
-# --------------------------------------------------------------------
-
-class InputException(APIException):
+class InputException(MessageException):
     '''
     Wraps exceptions that are related to input data.
     '''
@@ -47,7 +22,7 @@ class InputException(APIException):
     def __init__(self, message):
         super().__init__(message)
         
-class OutputException(APIException):
+class OutputException(MessageException):
     '''
     Wraps exceptions that are related to output data.
     '''

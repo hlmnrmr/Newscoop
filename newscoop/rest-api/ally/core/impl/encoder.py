@@ -9,12 +9,11 @@ Created on Jun 17, 2011
 Provides encoders implementations.
 '''
 
-from _abcoll import Callable
 from xml.sax.saxutils import escape
-from ally.core.spec.presenting import Encoder, EncoderPath, EncoderFactory
+from ally.core.spec.presenting import Encoder, EncoderFactory
 from ally.core.spec.resources import Path, Converter
-from ally.core.spec import content_type
 from ally.core.util import injected
+from ally.core.spec.server import Response
 
 # --------------------------------------------------------------------
 
@@ -24,22 +23,24 @@ class EncoderBase(Encoder):
     Attention this class needs to be extended to provide the actual functionality.
     '''
     
-    def __init__(self, out, encoderPath, factory):
+    def __init__(self, out, response, factory):
         '''
         Initialize the encoder.
         
-        @param out: Callable
-            The output Callable used for writing content.
+        @param out: object
+            A writer object that has a 'write' method, used for outputting the content.
         @param encoderPath: EncoderPath
             The path encoder to be used by this content encoder when writing request paths.
         @param factory: EncoderBaseFactory
             The factory that created this encoder.
         '''
-        assert isinstance(out, Callable), 'Invalid output Callable provided %s' % out
-        assert isinstance(encoderPath, EncoderPath), 'Invalid encoder path %s' % encoderPath
-        assert isinstance(factory, EncoderBaseFactory), 'Invalid factory %s' % factory
-        self._out = out
-        self._encoderPath = encoderPath
+        assert getattr(out, 'write', None) is not None, 'Invalid output provided %s, has no write method' % out
+        assert isinstance(response, Response), 'Invalid response %s' % response
+        assert isinstance(factory, EncoderFactory), 'Invalid factory %s' % factory
+        def output(content):
+            out.write(bytes(content, response.charSet))
+        self._out = output
+        self._response = response
         self._factory = factory
         self.__nameStack = []
         self.__opened = True
@@ -79,29 +80,6 @@ class EncoderBase(Encoder):
         if len(self.__nameStack) == 0:
             self.__opened = False
         return name
-
-@injected
-class EncoderBaseFactory(EncoderFactory):
-    '''
-    Provides the base encoders factory class.
-    Attention this class needs to be extended to provide the actual functionality.
-    '''
-    
-    converter = Converter
-    # The converter used by the encoders of this factory.
-    
-    def __init__(self, contentType):
-        '''
-        @see: EncoderFactory.__init__
-        '''
-        super().__init__(contentType)
-
-    def isValidFormat(self, format):
-        '''
-        @see: EncoderFactory.isValidFormat
-        '''
-        assert isinstance(format, str), 'Invalid format %s' % format
-        return self.contentType.format == format.lower()
     
 # --------------------------------------------------------------------
 
@@ -110,11 +88,12 @@ class EncoderXMLIndented(EncoderBase):
     Provides encoding in XML form that also has proper indentation.
     '''
 
-    def __init__(self, out, encoderPath, factory):
+    def __init__(self, out, response, factory):
         '''
         @see: EncoderBase.__init__
         '''
-        super().__init__(out, encoderPath, factory)
+        assert isinstance(factory, EncoderXMLFactory), 'Invalid XML encoder factory %s' % factory
+        super().__init__(out, response, factory)
         self._indent = ''
     
     def put(self, name, value=None, type=None, path=None):
@@ -130,7 +109,7 @@ class EncoderXMLIndented(EncoderBase):
         self._out(name)
         if path is not None:
             self._out(' href="')
-            self._out(escape(self._encoderPath.encode(path)))
+            self._out(escape(self._response.encoderPath.encode(path)))
             self._out('"')
         if value is not None:
             self._out('>')
@@ -149,7 +128,9 @@ class EncoderXMLIndented(EncoderBase):
         fact = self._factory
         assert isinstance(fact, EncoderXMLFactory)
         if self.isEmpty():
-            self._out('<?xml version="1.0" encoding="utf-8"?>')
+            self._out('<?xml version="1.0" encoding="')
+            self._out(self._response.charSet)
+            self._out('"?>')
             self._out(fact.lineEnd)
         name = fact.converter.normalize(name)
         super().open(name)
@@ -178,26 +159,29 @@ class EncoderXMLIndented(EncoderBase):
     def __str__(self):
         return self.__class__.__name__
 
-class EncoderXMLFactory(EncoderBaseFactory):
+@injected
+class EncoderXMLFactory(EncoderFactory):
     '''
     Provides the XML encoders factory.
     '''
     
+    converter = Converter
+    # The converter used by the encoders of this factory.
     indented = '    '
     # The indented block to use default 4 spaces, can be changed.
     lineEnd = '\n'
     # The line end to use by default \n, can be changed.
     
     def __init__(self):
-        '''
-        @see: EncoderFactory.__init__
-        '''
-        super().__init__(content_type.XML)
-
-    def createEncoder(self, encoderPath, out):
+        assert isinstance(self.converter, Converter), 'Invalid Converter object %s' % self.converter
+        assert isinstance(self.indented, str), 'Invalid string %s' % self.indented
+        assert isinstance(self.lineEnd, str), 'Invalid string %s' % self.lineEnd
+ 
+    def createEncoder(self, rsp, out):
         '''
         @see: EncoderFactory.createEncoder
         '''
-        return EncoderXMLIndented(out, encoderPath, self)
+        assert isinstance(rsp, Response), 'Invalid response %s' % rsp
+        return EncoderXMLIndented(out, rsp, self)
         
 # --------------------------------------------------------------------

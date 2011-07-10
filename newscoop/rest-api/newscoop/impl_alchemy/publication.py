@@ -14,8 +14,9 @@ from ally.core.internationalization import msg as _
 from ally.core.util import injected
 from newscoop.api.publication import IPublicationService, Publication, \
     QPublication
-import logging
 from newscoop.impl_alchemy.meta import publication as pm
+from sqlalchemy.orm.exc import NoResultFound
+import logging
 from newscoop.impl_alchemy import SessionSupport
 
 # --------------------------------------------------------------------
@@ -37,7 +38,7 @@ class PublicationServiceAlchemy(IPublicationService, SessionSupport):
     def byId(self, id):
         try:
             return self.session().query(Publication).filter(pm.Id == id).one()
-        except Exception:
+        except NoResultFound:
             raise InputException(_('No publication for id ($1)', id))
 
     def all(self, offset=None, limit=None, q=None):

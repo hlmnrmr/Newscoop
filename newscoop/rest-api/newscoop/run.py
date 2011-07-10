@@ -20,8 +20,8 @@ logging.basicConfig(level=logging.DEBUG if __debug__ else logging.WARN)
 
 # --------------------------------------------------------------------
 
-from newscoop import config_service
-from ally import config_web, web
+from newscoop import service_config
+from ally.http import server_config, server
 from sqlalchemy.engine import create_engine
 from newscoop.impl_alchemy.meta import meta
 
@@ -31,8 +31,9 @@ if __name__ == '__main__':
     engine = create_engine("sqlite:///newscoop.db", encoding='utf8', echo=__debug__)
     meta.create_all(engine)
 
-    config_web.location = 'localhost'
-    config_web.port = 80
-    config_web.serviceConfigModule = config_service
-    config_web.setup(util.IoCResources(engine=engine))
-    web.run()
+    server_config.serverLocation = 'localhost'
+    server_config.serverPort = 80
+    service_config.engine = engine
+    service_config.setupAll()
+    
+    server.run()

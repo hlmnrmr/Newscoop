@@ -9,26 +9,8 @@ Created on Jun 30, 2011
 Provides the known character sets.
 '''
 
-from ally.core.util import Protected, guard
-
-# --------------------------------------------------------------------
-
-@guard
-class CharSet(Protected):
-    '''
-    Contains the character set.
-    '''
-    
-    def __init__(self, format):
-        '''
-        Constructs the character set.
-        
-        @param format: string
-            The format code string, something like 'UTF-8'.
-        '''
-        assert isinstance(format, str), 'Invalid format %s' % format
-        self.format = format
-
-# --------------------------------------------------------------------
 # Character sets.
-UTF_8 = CharSet('UTF-8')
+# --------------------------------------------------------------------
+
+UTF_8 = 'UTF-8'
+ISO_1 = 'ISO-8859-1'

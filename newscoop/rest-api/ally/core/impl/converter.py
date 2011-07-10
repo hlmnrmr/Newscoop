@@ -22,14 +22,14 @@ class Standard(Converter):
     
     def normalize(self, value):
         '''
-        @see: Standard.normalize
+        @see: Converter.normalize
         '''
         assert isinstance(value, str), 'Invalid string value %s' % value
         return value
     
     def convertBool(self, boolValue=None, parse=None):
         '''
-        @see: Standard.convertBool
+        @see: Converter.convertBool
         '''
         assert not (boolValue == None and parse == None), 'No value is provided'
         assert not (boolValue != None and parse != None), 'Only one value needs to be provided'
@@ -39,7 +39,7 @@ class Standard(Converter):
     
     def convertInt(self, intValue=None, parse=None):
         '''
-        @see: Standard.convertInt
+        @see: Converter.convertInt
         '''
         assert not (intValue == None and parse == None), 'No value is provided'
         assert not (intValue != None and parse != None), 'Only one value needs to be provided'
@@ -49,7 +49,7 @@ class Standard(Converter):
         
     def convertDecimal(self, decValue=None, parse=None):
         '''
-        @see: Standard.convertDecimal
+        @see: Converter.convertDecimal
         '''
         assert not (decValue == None and parse == None), 'No value is provided'
         assert not (decValue != None and parse != None), 'Only one value needs to be provided'

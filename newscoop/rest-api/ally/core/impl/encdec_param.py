@@ -28,7 +28,10 @@ class EncDecPrimitives(EncoderParams, DecoderParams):
     '''
     
     converter = Converter
-    # The converter used in parsing the parameter values.    
+    # The converter used in parsing the parameter values.
+    
+    def __init__(self):
+        assert isinstance(self.converter, Converter), 'Invalid Converter object %s' % self.converter
 
     def encode(self, inputs, inp, arg, params):
         '''
@@ -130,6 +133,12 @@ class EncDecQuery(EncoderParams, DecoderParams):
     nameOrderDesc = 'desc'
     separatorName = '.'
     # The separator used in extending parameters from names.
+    
+    def __init__(self):
+        assert isinstance(self.converter, Converter), 'Invalid Converter object %s' % self.converter
+        assert isinstance(self.nameOrderAsc, str), 'Invalid string %s' % self.nameOrderAsc
+        assert isinstance(self.nameOrderDesc, str), 'Invalid string %s' % self.nameOrderDesc
+        assert isinstance(self.separatorName, str), 'Invalid string %s' % self.separatorName
 
     def encode(self, inputs, inp, arg, params):
         '''

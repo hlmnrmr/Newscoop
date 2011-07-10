@@ -9,12 +9,12 @@ Created on Jun 30, 2011
 Contains the codes to be used for the server responses.
 '''
 
-from ally.core.util import Protected, guard
+from ally.core.util import guard
 
 # --------------------------------------------------------------------
 
 @guard
-class Code(Protected):
+class Code:
     '''
     Contains the server code.
     '''
@@ -35,13 +35,13 @@ class Code(Protected):
 
 # --------------------------------------------------------------------
 # Response codes.
-INTERNAL_ERROR = Code(500, False) # HTTP code 500 Internal Server Error
 UNKNOWN_FORMAT = Code(400, False) # HTTP code 400 Bad Request
 UNKNOWN_PARAMS = Code(400, False) # HTTP code 400 Bad Request
 ILLEGAL_PARAM = Code(400, False) # HTTP code 400 Bad Request
 RESOURCE_NOT_FOUND = Code(404, False) # HTTP code 404 Not Found
 NOT_AVAILABLE = Code(405, False) # HTTP code 405 Method Not Allowed
 CANNOT_DELETE = Code(404, False) # HTTP code 404 Not Found
+INTERNAL_ERROR = Code(500, False) # HTTP code 500 Internal Server Error
 
 RESOURCE_FOUND = Code(200, True) # HTTP code 200 OK
 DELETED_SUCCESS = Code(204, True) # HTTP code 204 No Content

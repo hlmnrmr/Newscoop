@@ -9,14 +9,14 @@ Created on Jul 6, 2011
 Provides support for SQL alchemy service implementations.
 '''
 
-from ally.core.spec.server import Processor, ProcessorsChain
+from ally.core.spec.server import Processor, ProcessorsChain, Response
 from ally.core.util import injected
 from sqlalchemy.engine.base import Engine
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm.session import Session, sessionmaker
 from threading import current_thread
 import logging
 import traceback
-from sqlalchemy.exc import InvalidRequestError
 
 # --------------------------------------------------------------------
 
@@ -50,7 +50,7 @@ def _getSession():
 # --------------------------------------------------------------------
 
 @injected
-class AlchemyOpenSessionHandler(Processor):
+class AlchemySessionHandler(Processor):
     '''
     Implementation for a processor that provides the SQLAlchemy session handling.
     '''
@@ -61,40 +61,31 @@ class AlchemyOpenSessionHandler(Processor):
         '''
         Construct the session stuff.
         '''
+        assert isinstance(self.engine, Engine), 'Invalid engine %s' % self.engine
         self.session = sessionmaker(bind=self.engine)
-        
 
-    def process(self, request, response, chain):
+    def process(self, req, rsp, chain):
         '''
         @see: Processor.process
         '''
+        assert isinstance(rsp, Response), 'Invalid response %s' % rsp
         assert isinstance(chain, ProcessorsChain), 'Invalid processors chain %s' % chain
         setattr(current_thread(), NAME_SQL_SESSION, self.session())
         log.debug('Created SQL Alchemy session')
         try:
-            chain.process(request, response)
-        finally:
-            # If the thread still has a session after the chain completion it means that something went wrong
-            # since the AlchemyCloseSessionHandler should have disposed of this session.
-            thread = current_thread()
-            session = getattr(thread, NAME_SQL_SESSION, None)
-            if session is not None:
-                session.rollback()
-                session.close()
-                delattr(thread, NAME_SQL_SESSION)
-                log.debug('Improper SQL Alchemy session, rolled back transactions')
+            chain.process(req, rsp)
+        except:
+            self._rollback()
+            raise
+        if rsp.code.isSuccess:
+            self._commit()
+        else:
+            self._rollback()
 
-class AlchemyCloseSessionHandler(Processor):
-    '''
-    Implementation for a processor that closes the SQLAlchemy session.
-    '''
-
-    def process(self, request, response, chain):
+    def _commit(self):
         '''
-        @see: Processor.process
+        Commit the current thread session.
         '''
-        assert isinstance(chain, ProcessorsChain), 'Invalid processors chain %s' % chain
-        # If the thread has a session it means that we need to commit it and close it.
         thread = current_thread()
         session = getattr(thread, NAME_SQL_SESSION, None)
         if session is not None:
@@ -107,4 +98,15 @@ class AlchemyCloseSessionHandler(Processor):
             session.close()
             delattr(thread, NAME_SQL_SESSION)
             log.debug('Properly closed SQL Alchemy session')
-        chain.process(request, response)
+
+    def _rollback(self):
+        '''
+        Roll back the current thread session.
+        '''
+        thread = current_thread()
+        session = getattr(thread, NAME_SQL_SESSION, None)
+        if session is not None:
+            session.rollback()
+            session.close()
+            delattr(thread, NAME_SQL_SESSION)
+            log.warning('Improper SQL Alchemy session, rolled back transactions')

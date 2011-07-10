@@ -36,6 +36,10 @@ class ServiceDummy:
         @param serviceClass: class|string
             The service class or fully qualified name of the service class.
         '''
+        assert isinstance(self.resourcesManager, ResourcesManager), \
+        'Invalid resources manager %s' % self.resourcesManager
+        assert isinstance(self.entitiesCount, int), 'Invalid entities count %s' % self.entitiesCount
+        assert self.entitiesCount > 0, 'Entities count needs to be greater than 0, provided %s' % self.entitiesCount
         if isinstance(serviceClass, str):
             self.clazz = classForName(serviceClass)
             assert isclass(self.clazz), 'Cannot find a class for name %s' % serviceClass
