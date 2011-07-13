@@ -35,6 +35,7 @@ class Code:
 
 # --------------------------------------------------------------------
 # Response codes.
+UNKNOWN_ENCODING = Code(400, False) # HTTP code 400 Bad Request
 UNKNOWN_FORMAT = Code(400, False) # HTTP code 400 Bad Request
 UNKNOWN_PARAMS = Code(400, False) # HTTP code 400 Bad Request
 ILLEGAL_PARAM = Code(400, False) # HTTP code 400 Bad Request

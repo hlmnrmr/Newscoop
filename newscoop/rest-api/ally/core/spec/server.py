@@ -56,6 +56,7 @@ class ProcessorsChain:
             for processor in processors:
                 assert isinstance(processor, Processor), 'Invalid processor %s' % processor
         self._processors = deque(processors)
+        self._consumed = False
     
     def process(self, request, response):
         '''
@@ -71,6 +72,18 @@ class ProcessorsChain:
             proc = self._processors.popleft()
             assert isinstance(proc, Processor)
             proc.process(request, response, self)
+        else:
+            self._consumed = True
+    
+    def isConsumed(self):
+        '''
+        Checks if the chain is consumed.
+        
+        @return: boolean
+            True if all processors from the chain have been executed, False if a processor from the chain has stopped
+            the execution of the other processors.
+        '''
+        return self._consumed
 
 @injected
 class Processors:
@@ -130,6 +143,12 @@ class Content(metaclass=abc.ABCMeta):
         @param nbytes: integer|None
             The number of bytes to read, or None to read all remaining available bytes from the content.
         '''
+    
+    @abc.abstractmethod
+    def close(self):
+        '''
+        Closes the content stream.
+        '''
         
 class ContentNone(Singletone, Content):
     '''
@@ -144,6 +163,12 @@ class ContentNone(Singletone, Content):
         @see: Content.read
         '''
         raise AssertionError('No content available')
+    
+    def close(self):
+        '''
+        @see: Content.close
+        '''
+        raise AssertionError('No content available to close')
     
 class ContentOnFile(Content):
     '''
@@ -183,6 +208,12 @@ class ContentOnFile(Content):
         bytes = self.file.read(count)
         self._offset += len(bytes)
         return bytes
+    
+    def close(self):
+        '''
+        @see: Content.close
+        '''
+        self.file.close()
 
 # --------------------------------------------------------------------
 # The available request methods.
@@ -253,8 +284,6 @@ class Response(metaclass=abc.ABCMeta):
             Contains the allow flags for the methods.
         @ivar encoderPath: EncoderPath
             The path encoder used for encoding paths that will be rendered in the response.
-        @ivar encoder: Encoder
-            The encoder used for encoding the content of the response.
         '''
         self.code = None
         self.message = None
@@ -262,7 +291,6 @@ class Response(metaclass=abc.ABCMeta):
         self.contentType = None
         self.allows = 0
         self.encoderPath = None
-        self.encoder = None
     
     def addAllows(self, method):
         '''

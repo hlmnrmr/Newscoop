@@ -13,3 +13,4 @@ Provides the known content types.
 # --------------------------------------------------------------------
 
 XML = 'XML'
+JSON = 'JSON'

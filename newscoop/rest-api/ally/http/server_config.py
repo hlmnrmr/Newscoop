@@ -9,16 +9,13 @@ Created on Jul 9, 2011
 Provides the configurations for the web server.
 '''
 
-from ally.core.impl import assembler as ass, encdec_param as edp, encoder as enc, \
-    render as rnd
+from ally.core.impl import assembler as ass, encdec_param as edp
 from ally.core.impl.converter import Standard
 from ally.core.impl.processor.decoding import DecodingHandler
-from ally.core.impl.processor.encoding import EncodingHandler
 from ally.core.impl.processor.explain_error import ExplainErrorHandler
 from ally.core.impl.processor.hinting import HintingHandler
 from ally.core.impl.processor.invoking import InvokingHandler
 from ally.core.impl.processor.parameters import ParametersHandler
-from ally.core.impl.processor.rendering import RenderingHandler
 from ally.core.impl.resources_manager import ResourcesManagerImpl
 from ally.core.spec import charset as cs, content_type as ct
 from ally.core.spec.server import Processors
@@ -28,6 +25,10 @@ from ally.http.processor.decoding_header import DecodingHeaderHandler
 from ally.http.processor.uri import URIHandler
 from ally.http.server import RequestHandler
 from ally.http.processor.content import ContentHandler
+from ally.core.impl.processor.encoding_xml import EncodingXMLHandler,\
+    DecodingXMLHandler
+from ally.core.impl.processor.encoding_json import EncodingJSONHandler
+from ally.core.impl.processor.encoding import EncodingProcessorsHandler
 
 # --------------------------------------------------------------------
 
@@ -41,7 +42,8 @@ services = None
 # --------------------------------------------------------------------
 # The configurations for content type and character sets.
 contentTypes = {
-                ct.XML:('text/plain', 'text/xml', 'application/xml')
+                ct.XML:('text/xml', 'text/plain', 'application/xml'),
+                ct.JSON:('text/json')
                 }
 
 charSets = {
@@ -106,42 +108,6 @@ def setupParameters():
     initialize(encDecQuery)
 
 # --------------------------------------------------------------------
-# Creating the encodings
-
-encodingXML = enc.EncoderXMLFactory()
-# ---------------------------------
-encodingFactories = {ct.XML:encodingXML}
-
-def setupEncoders():
-    encodingXML.converter = converterContent
-    initialize(encodingXML)
-
-# --------------------------------------------------------------------
-# Creating the renders
-
-renderListPath = rnd.RenderListPath()
-renderListIds = rnd.RenderListIds()
-renderListModels = rnd.RenderListModels()
-renderModel = rnd.RenderModel()
-# ---------------------------------
-renderers = [renderListPath, renderListIds, renderListModels, renderModel]
-renders = rnd.Renders()
-
-def setupRenderers():
-    initialize(renderListPath)
-    
-    renderListIds.resourcesManager = resourcesManager
-    initialize(renderListIds)
-    
-    initialize(renderListModels)
-    
-    renderModel.resourcesManager = resourcesManager
-    initialize(renderModel)
-    
-    renders.renders = renderers
-    initialize(renders)
-
-# --------------------------------------------------------------------
 # Creating the assemblers
 
 assembleGetAll = ass.AssembleGetAll()
@@ -163,7 +129,7 @@ def setupAssemblers():
     initialize(assembleDelete)
 
 # --------------------------------------------------------------------
-# Creating the resource manager
+# Creating the encoding processors
 
 resourcesManager = ResourcesManagerImpl()
 
@@ -175,6 +141,27 @@ def setupResourcesManager():
     initialize(resourcesManager)
 
 # --------------------------------------------------------------------
+# Creating the resource manager
+
+encodingXML = EncodingXMLHandler()
+encodingJSON = EncodingJSONHandler()
+# ---------------------------------
+handlersEncoding = [encodingXML, encodingJSON]
+processorsEncoding = Processors()
+
+def setupProcessorsEncoding():
+    encodingXML.converter = converterContent
+    encodingXML.resourcesManager = resourcesManager
+    initialize(encodingXML)
+    
+    encodingJSON.converter = converterContent
+    encodingJSON.resourcesManager = resourcesManager
+    initialize(encodingJSON)
+    
+    processorsEncoding.processors = handlersEncoding
+    initialize(processorsEncoding)
+
+# --------------------------------------------------------------------
 # Creating the processors used in handling the request
 
 explainErrorHandler = ExplainErrorHandler()
@@ -182,14 +169,14 @@ decodingHeaderHandler = DecodingHeaderHandler()
 contentHandler = ContentHandler()
 uri = URIHandler()
 parameters = ParametersHandler()
-decoding = DecodingHandler()
 invokingHandler = InvokingHandler()
 hintingHandler = HintingHandler()
-encoding = EncodingHandler()
-renderingHandler = RenderingHandler()
+encoding = EncodingProcessorsHandler()
+# -----------
+decoding = DecodingXMLHandler()
 # ---------------------------------
-handlers = [explainErrorHandler, decodingHeaderHandler, contentHandler, uri, parameters, decoding, invokingHandler, \
-                  hintingHandler, encoding, renderingHandler]
+handlers = [explainErrorHandler, decodingHeaderHandler, contentHandler, uri, parameters, invokingHandler, \
+                  hintingHandler, encoding]
 processors = Processors()
 
 def setupProcessors():
@@ -222,11 +209,8 @@ def setupProcessors():
     hintingHandler.encoders = encodersParameters
     initialize(hintingHandler)
     
-    encoding.encoderFactories = encodingFactories
+    encoding.encodings = processorsEncoding
     initialize(encoding)
-
-    renderingHandler.renders = renders
-    initialize(renderingHandler)
     
     processors.processors = handlers
     initialize(processors)
@@ -240,8 +224,7 @@ def setupAll():
     setupConverters()
     setupHeaders()
     setupParameters()
-    setupEncoders()
-    setupRenderers()
     setupAssemblers()
     setupResourcesManager()
+    setupProcessorsEncoding()
     setupProcessors()
