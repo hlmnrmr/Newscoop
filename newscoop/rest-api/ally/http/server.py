@@ -77,7 +77,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self._process(GET)
-
     
     def do_POST(self):
         self._process(INSERT)

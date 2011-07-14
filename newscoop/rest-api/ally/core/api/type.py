@@ -411,3 +411,48 @@ def typeFor(obj, type=None):
     assert isinstance(type, Type), 'Invalid type %s' % type
     assert 'api_type' not in obj.__dict__, 'Already has a type %s' % obj
     setattr(obj, 'api_type', type)
+
+# --------------------------------------------------------------------
+
+def isBool(typ):
+    '''
+    Checks if the provided type is a property type for an boolean type.
+    
+    @param typ: Type
+        The type to check.
+    @return: boolean
+        True if the provided type is a boolean, false otherwise.
+    '''
+    return isinstance(typ, TypeClass) and typ.forClass() == bool
+
+def isTypeId(typ):
+    '''
+    Checks if the provided type is a type id.
+    
+    @param typ: Type
+        The type to check.
+    @return: boolean
+        True if the provided type is a type integer id, false otherwise.
+    '''
+    if not isinstance(typ, TypeId):
+        return False
+    if not typ.forClass() == int:
+        return False
+    return True
+
+def isPropertyTypeId(typ, model=None):
+    '''
+    Checks if the provided type is a property type for an integer type id.
+    
+    @param typ: Type
+        The type to check.
+    @param model: Model|None
+        The model for which the property type has to belong to, will not be checked if None.
+    @return: boolean
+        True if the provided type is a property for an integer id, false otherwise.
+    '''
+    if not(isinstance(typ, TypeProperty) and isTypeId(typ.property.type)):
+        return False
+    if model is not None and not typ.model == model:
+        return False
+    return True

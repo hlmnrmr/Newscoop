@@ -15,6 +15,7 @@ from ally.core.util import injected, findInValues
 from ally.http.spec import DecoderHeader, EncoderHeader, HeaderException, \
     ParserHeader, RequestHTTP
 import re
+from ally.core.spec.resources import ResourcesManager
 
 # --------------------------------------------------------------------
 
@@ -52,7 +53,7 @@ class EncPsrContentType(EncoderHeader, ParserHeader):
         assert isinstance(rsp, Response), 'Invalid response %s' % rsp
         if rsp.contentType is not None:
             vals = self.contentTypes[rsp.contentType]
-            vals = [vals[0] if isinstance(vals, tuple) else vals]
+            vals = [vals[0] if isinstance(vals, list) else vals]
             if rsp.charSet is not None:
                 vals.extend([self.sepParam, self.attrCharSet, self.sepAttrValue, rsp.charSet])
             headers[self.name] = ''.join(vals)
@@ -141,11 +142,36 @@ class EncoderAllow(EncoderHeader):
         assert isinstance(rsp, Response), 'Invalid response %s' % rsp
         if rsp.allows != 0:
             allow = []
-            if self.allows & GET != 0: allow.append(self.methGet)
-            if self.allows & DELETE != 0: allow.append(self.methDel)
-            if self.allows & INSERT != 0: allow.append(self.methIns)
-            if self.allows & UPDATE != 0: allow.append(self.methUpd)
+            if rsp.allows & GET != 0: allow.append(self.methGet)
+            if rsp.allows & DELETE != 0: allow.append(self.methDel)
+            if rsp.allows & INSERT != 0: allow.append(self.methIns)
+            if rsp.allows & UPDATE != 0: allow.append(self.methUpd)
             headers[self.name] = self.sepMethods.join(allow)
+            
+@injected
+class EncoderContentLocation(EncoderHeader):
+    '''
+    Implementation for the header encoder for content location, this will use the response object type and if it a
+    type property id reference will provide that reference to the content location header.
+    '''
+    
+    name = 'Content-Location'
+    resourcesManager = ResourcesManager
+    # The resources manager used in locating the path for the reference.
+     
+    def __init__(self):
+        assert isinstance(self.name, str), 'Invalid string %s' % self.name
+        assert isinstance(self.resourcesManager, ResourcesManager), \
+        'Invalid resources manager %s' % self.resourcesManager
+    
+    def encode(self, headers, rsp):
+        '''
+        @see: EncoderHeader.encode
+        '''
+        assert isinstance(headers, dict), 'Invalid headers dictionary %s' % headers
+        assert isinstance(rsp, Response), 'Invalid response %s' % rsp
+        if rsp.contentLocation is not None:
+            headers[self.name] = rsp.encoderPath.encode(rsp.contentLocation)
 
 # --------------------------------------------------------------------
 

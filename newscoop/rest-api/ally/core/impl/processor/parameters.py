@@ -13,9 +13,9 @@ from ally.core.api.exception import InputException
 from ally.core.internationalization import msg as _
 from ally.core.spec.codes import ILLEGAL_PARAM, UNKNOWN_PARAMS
 from ally.core.spec.presenting import DecoderParams
-from ally.core.spec.resources import Node, Invoker
-from ally.core.spec.server import Processor, ProcessorsChain, \
-    Response, INSERT, UPDATE, DELETE, Request
+from ally.core.spec.resources import Invoker
+from ally.core.spec.server import Processor, ProcessorsChain, Response, Request, \
+    GET
 from ally.core.util import injected
 import logging
 
@@ -50,16 +50,8 @@ class ParametersHandler(Processor):
         assert isinstance(rsp, Response), 'Invalid response %s' % rsp
         req.arguments = {}
         if len(req.params) > 0:
-            node = req.resourcePath.node
-            assert isinstance(node, Node), \
-            'The node has to be available in the resource path %s problems in previous processors' % req.resourcePath
-            if req.method in (INSERT, UPDATE, DELETE):
-                rsp.setCode(UNKNOWN_PARAMS, _('Illegal parameters: $1', \
-                                              ', '.join([param[0] for param in req.params])))
-                log.warning('Illegal method %s for parameters', req.method)
-                return
-            if node.get is not None:
-                invoker = node.get
+            if req.method == GET:
+                invoker = req.resourcePath.node.get
                 assert isinstance(invoker, Invoker)
                 # We only consider as parameters the not mandatory primitive inputs.
                 params = list(req.params)
@@ -78,4 +70,9 @@ class ParametersHandler(Processor):
                     rsp.setCode(UNKNOWN_PARAMS, _('Unknown parameters: $1', ', '.join([param[0] for param in params])))
                     log.warning('Unsolved request parameters %s', params)
                     return
+            else:
+                rsp.setCode(UNKNOWN_PARAMS, _('Illegal parameters: $1', \
+                                              ', '.join([param[0] for param in req.params])))
+                log.warning('Illegal method %s for parameters', req.method)
+                return
         chain.process(req, rsp)

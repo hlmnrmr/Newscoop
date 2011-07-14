@@ -280,6 +280,10 @@ class Response(metaclass=abc.ABCMeta):
             The character set for the response, do not update this directly use a one of the methods.
         @ivar contentType: string
             The content type for the response, do not update this directly use a one of the methods.
+        @ivar contentType: string
+            The content type for the response, do not update this directly use a one of the methods.
+        @ivar contentLocation: Path
+            The content location path.
         @ivar allows: integer
             Contains the allow flags for the methods.
         @ivar encoderPath: EncoderPath
@@ -289,6 +293,7 @@ class Response(metaclass=abc.ABCMeta):
         self.message = None
         self.charSet = None
         self.contentType = None
+        self.contentLocation = None
         self.allows = 0
         self.encoderPath = None
     

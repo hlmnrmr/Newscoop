@@ -9,7 +9,8 @@ Created on Jun 18, 2011
 Provides the call assemblers used in constructing the resources node.
 '''
 
-from ally.core.api.type import TypeProperty, TypeModel, TypeId, Iter, Input
+from ally.core.api.type import TypeProperty, TypeModel, TypeId, Iter, Input,\
+    isPropertyTypeId
 from ally.core.impl.node import NodeModel, NodeId
 from ally.core.spec.resources import Assembler, Node, Invoker
 import abc
@@ -121,7 +122,7 @@ class AssembleGetById(AssembleInvokers):
         model = invoker.outputType.model
         if not(len(invoker.inputs) > 0 and invoker.mandatoryCount == 1):
             return False
-        if not _isIntId(invoker.inputs[0], model):
+        if not isPropertyTypeId(invoker.inputs[0].type, model):
             return False
         node = _obtainNodeId(_obtainNodeModel(root, model), invoker.inputs[0].type)
         assert node.get is None, 'There is already a get assigned for %' % node
@@ -146,7 +147,7 @@ class AssembleInsert(AssembleInvokers):
             return False
         model = invoker.inputs[0].type.model
         if isinstance(invoker.outputType, TypeProperty):
-            if not _isIntId(invoker.outputType, model):
+            if not isPropertyTypeId(invoker.outputType, model):
                 return False
         elif isinstance(invoker.outputType, TypeModel):
             if not model == invoker.outputType.model:
@@ -174,7 +175,7 @@ class AssembleUpdateIdModel(AssembleInvokers):
         if not isinstance(invoker.inputs[1].type, TypeModel):
             return False
         model = invoker.inputs[1].type.model
-        if not _isIntId(invoker.inputs[0], model):
+        if not isPropertyTypeId(invoker.inputs[0].type, model):
             return False
         if invoker.outputType.forClass() != bool:
             return False
@@ -234,7 +235,7 @@ class AssembleDelete(AssembleInvokers):
         assert isinstance(invoker, Invoker), 'Invalid invoker %s' % invoker
         if not len(invoker.inputs) == 1:
             return False
-        if not _isIntId(invoker.inputs[0]):
+        if not isPropertyTypeId(invoker.inputs[0].type):
             return False
         typeId = invoker.inputs[0].type
         assert isinstance(typeId, TypeProperty)
@@ -247,19 +248,6 @@ class AssembleDelete(AssembleInvokers):
         return True
 
 # --------------------------------------------------------------------
-
-def _isIntId(inputOrType, model=None):
-    if isinstance(inputOrType, Input):
-        typeProperty = inputOrType.type
-    else:
-        typeProperty = inputOrType
-    if not(isinstance(typeProperty, TypeProperty) and isinstance(typeProperty.property.type, TypeId)):
-        return False
-    if not typeProperty.forClass() == int:
-        return False
-    if model is not None and not typeProperty.model == model:
-        return False
-    return True
 
 def _obtainNodeModel(root, model):
     assert isinstance(root, Node)

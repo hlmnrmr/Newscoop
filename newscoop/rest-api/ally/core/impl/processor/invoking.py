@@ -9,15 +9,18 @@ Created on Jun 30, 2011
 Provides the invoking handler.
 '''
 
+from ally.core.api.exception import InputException
+from ally.core.api.type import isBool, isPropertyTypeId, typeFor
 from ally.core.internationalization import msg as _
-from ally.core.spec.codes import NOT_AVAILABLE, INTERNAL_ERROR, \
-    RESOURCE_NOT_FOUND, DELETED_SUCCESS, CANNOT_DELETE
-from ally.core.spec.resources import Path, Node, Invoker
-from ally.core.spec.server import Processor, ProcessorsChain, Response, INSERT, UPDATE, DELETE, GET, \
-    Request
+from ally.core.spec.codes import INTERNAL_ERROR, RESOURCE_NOT_FOUND, \
+    DELETED_SUCCESS, CANNOT_DELETE, UPDATE_SUCCESS, CANNOT_UPDATE, \
+    INSERT_SUCCESS, CANNOT_INSERT
+from ally.core.spec.resources import Path, Node, Invoker, ResourcesManager
+from ally.core.spec.server import Processor, ProcessorsChain, Response, INSERT, \
+    UPDATE, DELETE, GET, Request
 import logging
 import traceback
-from ally.core.api.exception import InputException
+from ally.core.util import injected
 
 # --------------------------------------------------------------------
 
@@ -25,11 +28,19 @@ log = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------
 
+@injected
 class InvokingHandler(Processor):
     '''
     Implementation for a processor that provides the invoking for the node in order to get the resources 
     for rendering.    
     '''
+    
+    resourcesManager = ResourcesManager
+    # The resources manager used in locating the resource paths for the id's presented.
+    
+    def __init__(self):
+        assert isinstance(self.resourcesManager, ResourcesManager), \
+        'Invalid resources manager %s' % self.resourcesManager
     
     def process(self, req, rsp, chain):
         '''
@@ -41,13 +52,9 @@ class InvokingHandler(Processor):
         path = req.resourcePath
         assert isinstance(path, Path)
         node = path.node
-        assert isinstance(node, Node), \
-        'The node has to be available in the path %s problems in previous processors' % path
+        assert isinstance(node, Node)
         if req.method == GET: # Retrieving
             invoker = node.get
-            if invoker is None:
-                self._sendNotAvailable(node, rsp, _('Path not available for get'))
-                return
             assert isinstance(invoker, Invoker)
             argsDict = path.toArguments(invoker)
             argsDict.update(req.arguments)
@@ -57,33 +64,62 @@ class InvokingHandler(Processor):
             except: return
         elif req.method == INSERT: # Inserting
             invoker = node.insert
-            if invoker is None:
-                self._sendNotAvailable(node, rsp, _('Path not available for insert'))
-                return
             assert isinstance(invoker, Invoker)
-
+            argsDict = path.toArguments(invoker)
+            argsDict.update(req.arguments)
+            try:
+                value = self._invoke(invoker, argsDict, rsp)
+                if isPropertyTypeId(invoker.outputType):
+                    typ = invoker.outputType
+                    if value is not None:
+                        path = self.resourcesManager.findShortPath(typeFor(typ.model.modelClass), typ)
+                        if path is not None:
+                            path.update(value, invoker.outputType)
+                            rsp.contentLocation = path
+                        else:
+                            req.objType = invoker.outputType
+                            req.obj = value
+                    else:
+                        rsp.setCode(CANNOT_INSERT, _('Cannot insert'))
+                        log.debug('Cannot updated resource')
+                        return
+                else:
+                    req.objType = invoker.outputType
+                    req.obj = value
+                rsp.setCode(INSERT_SUCCESS, _('Successfully created'))
+            except: return
         elif req.method == UPDATE: # Updating
             invoker = node.update
-            if invoker is None:
-                self._sendNotAvailable(node, rsp, _('Path not available for update'))
-                return
             assert isinstance(invoker, Invoker)
-            
+            argsDict = path.toArguments(invoker)
+            argsDict.update(req.arguments)
+            try:
+                value = self._invoke(invoker, argsDict, rsp)
+                if isBool(invoker.outputType):
+                    if value == True:
+                        rsp.setCode(UPDATE_SUCCESS, _('Successfully updated'))
+                        log.debug('Successful updated resource')
+                    else:
+                        rsp.setCode(CANNOT_UPDATE, _('Cannot updated'))
+                        log.debug('Cannot updated resource')
+                    return
+                else:
+                    #If an entity is returned than we will render that.
+                    req.objType = invoker.outputType
+                    req.obj = value
+            except: return
         elif req.method == DELETE: # Deleting
             invoker = node.delete
-            if invoker is None:
-                self._sendNotAvailable(node, rsp, _('Path not available for delete'))
-                return
             assert isinstance(invoker, Invoker)
             try:
                 value = self._invoke(invoker, path.toArguments(invoker), rsp)
-                if value == True:
-                    rsp.setCode(DELETED_SUCCESS, _('Successfully deleted'))
-                    log.debug('Successful deleted resource')
-                    return
-                elif value == False:
-                    rsp.setCode(CANNOT_DELETE, _('Cannot delete'))
-                    log.debug('Cannot deleted resource')
+                if isBool(invoker.outputType):
+                    if value == True:
+                        rsp.setCode(DELETED_SUCCESS, _('Successfully deleted'))
+                        log.debug('Successful deleted resource')
+                    else:
+                        rsp.setCode(CANNOT_DELETE, _('Cannot delete'))
+                        log.debug('Cannot deleted resource')
                     return
                 else:
                     #If an entity is returned than we will render that.
@@ -93,26 +129,6 @@ class InvokingHandler(Processor):
         else:
             raise AssertionError('Cannot process request method %s' % req.method)
         chain.process(req, rsp)
-
-    def _processAllow(self, node, rsp):
-        '''
-        Set the allows for the response based on the provided node.
-        '''
-        assert isinstance(node, Node)
-        assert isinstance(rsp, Response)
-        if node.get is not None:
-            rsp.setAllows(GET)
-        if node.insert is not None:
-            rsp.setAllows(INSERT)
-        if node.update is not None:
-            rsp.setAllows(UPDATE)
-        if node.delete is not None:
-            rsp.setAllows(DELETE)
-            
-    def _sendNotAvailable(self, node, rsp, message):
-        self._processAllow(node, rsp)
-        rsp.setCode(NOT_AVAILABLE, message)
-        log.warning('(%s) for node %s', message.default, node)
         
     def _invoke(self, invoker, argsDict, rsp):
         args = []

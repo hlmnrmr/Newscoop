@@ -16,6 +16,7 @@ from newscoop.impl_alchemy.publication import PublicationServiceAlchemy
 from newscoop.impl_alchemy import AlchemySessionHandler
 from ally.http import server_config
 from ally.core.util import initialize
+from newscoop import php_client_config
 
 # --------------------------------------------------------------------
 
@@ -66,3 +67,4 @@ def setupAll():
     setupProcessors()
     setupServices()
     server_config.setupAll()
+    php_client_config.setupAll()

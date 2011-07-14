@@ -36,13 +36,19 @@ class Code:
 # --------------------------------------------------------------------
 # Response codes.
 UNKNOWN_ENCODING = Code(400, False) # HTTP code 400 Bad Request
+UNKNOWN_DECODING = Code(400, False) # HTTP code 400 Bad Request
 UNKNOWN_FORMAT = Code(400, False) # HTTP code 400 Bad Request
 UNKNOWN_PARAMS = Code(400, False) # HTTP code 400 Bad Request
+BAD_CONTENT = Code(400, False) # HTTP code 400 Bad Request
 ILLEGAL_PARAM = Code(400, False) # HTTP code 400 Bad Request
 RESOURCE_NOT_FOUND = Code(404, False) # HTTP code 404 Not Found
-NOT_AVAILABLE = Code(405, False) # HTTP code 405 Method Not Allowed
+METHOD_NOT_AVAILABLE = Code(501, False) # HTTP code 501 Unsupported method
 CANNOT_DELETE = Code(404, False) # HTTP code 404 Not Found
+CANNOT_UPDATE = Code(404, False) # HTTP code 404 Not Found
+CANNOT_INSERT = Code(404, False) # HTTP code 404 Not Found
 INTERNAL_ERROR = Code(500, False) # HTTP code 500 Internal Server Error
 
 RESOURCE_FOUND = Code(200, True) # HTTP code 200 OK
 DELETED_SUCCESS = Code(204, True) # HTTP code 204 No Content
+UPDATE_SUCCESS = Code(200, True) # HTTP code 200 OK
+INSERT_SUCCESS = Code(201, True) # HTTP code 201 Created

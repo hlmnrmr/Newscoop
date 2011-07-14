@@ -11,7 +11,11 @@ Provides the configurations for the web server.
 
 from ally.core.impl import assembler as ass, encdec_param as edp
 from ally.core.impl.converter import Standard
-from ally.core.impl.processor.decoding import DecodingHandler
+from ally.core.impl.processor.encoding import EncodingProcessorsHandler
+from ally.core.impl.processor.encdec_json import EncodingJSONHandler, \
+    DecodingJSONHandler
+from ally.core.impl.processor.encdec_xml import EncodingXMLHandler, \
+    DecodingXMLHandler
 from ally.core.impl.processor.explain_error import ExplainErrorHandler
 from ally.core.impl.processor.hinting import HintingHandler
 from ally.core.impl.processor.invoking import InvokingHandler
@@ -21,16 +25,16 @@ from ally.core.spec import charset as cs, content_type as ct
 from ally.core.spec.server import Processors
 from ally.core.util import initialize
 from ally.http import encdec_header as edh
+from ally.http.processor.content import ContentHandler
 from ally.http.processor.decoding_header import DecodingHeaderHandler
 from ally.http.processor.uri import URIHandler
 from ally.http.server import RequestHandler
-from ally.http.processor.content import ContentHandler
-from ally.core.impl.processor.encoding_xml import EncodingXMLHandler,\
-    DecodingXMLHandler
-from ally.core.impl.processor.encoding_json import EncodingJSONHandler
-from ally.core.impl.processor.encoding import EncodingProcessorsHandler
+from ally.core.impl.processor.method_validation import MethodValidationHandler
+from ally.core.impl.processor.decoding import DecodingHandler
 
 # --------------------------------------------------------------------
+
+__version__ = '0.1'
 
 serverLocation = None
 # To be injected before setup, provides the location of the server.
@@ -42,13 +46,13 @@ services = None
 # --------------------------------------------------------------------
 # The configurations for content type and character sets.
 contentTypes = {
-                ct.XML:('text/xml', 'text/plain', 'application/xml'),
-                ct.JSON:('text/json')
+                ct.XML:['text/xml', 'text/plain', 'application/xml'],
+                ct.JSON:['text/json', 'application/json']
                 }
 
 charSets = {
-            cs.UTF_8:(cs.UTF_8, cs.UTF_8.lower()),
-            cs.ISO_1:(cs.ISO_1, cs.ISO_1.lower())
+            cs.UTF_8:[cs.UTF_8, cs.UTF_8.lower()],
+            cs.ISO_1:[cs.ISO_1, cs.ISO_1.lower()]
             }
 
 # --------------------------------------------------------------------
@@ -69,11 +73,12 @@ parserContentType = encPsrContentType = edh.EncPsrContentType()
 parserContentLength = edh.ParserContentLength()
 
 encoderAllow = edh.EncoderAllow()
+encoderContentLocation = edh.EncoderContentLocation()
 
 decoderAcceptContentType = edh.DecoderAcceptContentType()
 decoderAcceptCharSet = edh.DecoderAcceptCharSet()
 # ---------------------------------
-encodersHeader = [encPsrContentType, encoderAllow]
+encodersHeader = [encPsrContentType, encoderAllow, encoderContentLocation]
 decodersHeader = [decoderAcceptContentType, decoderAcceptCharSet]
 
 def setupHeaders():
@@ -84,6 +89,9 @@ def setupHeaders():
     initialize(parserContentLength)
     
     initialize(encoderAllow)
+    
+    encoderContentLocation.resourcesManager = resourcesManager
+    initialize(encoderContentLocation)
     
     decoderAcceptContentType.contentTypes = contentTypes
     initialize(decoderAcceptContentType)
@@ -141,7 +149,7 @@ def setupResourcesManager():
     initialize(resourcesManager)
 
 # --------------------------------------------------------------------
-# Creating the resource manager
+# Creating the encoding processors
 
 encodingXML = EncodingXMLHandler()
 encodingJSON = EncodingJSONHandler()
@@ -162,21 +170,40 @@ def setupProcessorsEncoding():
     initialize(processorsEncoding)
 
 # --------------------------------------------------------------------
+# Creating the decoding processors
+
+decodingXML = DecodingXMLHandler()
+decodingJSON = DecodingJSONHandler()
+# ---------------------------------
+handlersDecoding = [decodingXML, decodingJSON]
+processorsDecoding = Processors()
+
+def setupProcessorsDecoding():
+    decodingXML.converter = converterContent
+    initialize(decodingXML)
+    
+    decodingJSON.converter = converterContent
+    initialize(decodingJSON)
+    
+    processorsDecoding.processors = handlersDecoding
+    initialize(processorsDecoding)
+    
+# --------------------------------------------------------------------
 # Creating the processors used in handling the request
 
 explainErrorHandler = ExplainErrorHandler()
 decodingHeaderHandler = DecodingHeaderHandler()
 contentHandler = ContentHandler()
 uri = URIHandler()
+methodValidation = MethodValidationHandler()
 parameters = ParametersHandler()
 invokingHandler = InvokingHandler()
 hintingHandler = HintingHandler()
 encoding = EncodingProcessorsHandler()
-# -----------
-decoding = DecodingXMLHandler()
+decoding = DecodingHandler()
 # ---------------------------------
-handlers = [explainErrorHandler, decodingHeaderHandler, contentHandler, uri, parameters, invokingHandler, \
-                  hintingHandler, encoding]
+handlers = [explainErrorHandler, decodingHeaderHandler, contentHandler, uri, methodValidation, parameters, \
+                  decoding, invokingHandler, hintingHandler, encoding]
 processors = Processors()
 
 def setupProcessors():
@@ -199,11 +226,15 @@ def setupProcessors():
     uri.netloc = serverLocation + (':' + str(serverPort) if serverPort != 80 else '')
     initialize(uri)
     
+    initialize(methodValidation)
+    
     parameters.decoders = decodersParameters
     initialize(parameters)
     
+    decoding.decodings = processorsDecoding
     initialize(decoding)
     
+    invokingHandler.resourcesManager = resourcesManager
     initialize(invokingHandler)
     
     hintingHandler.encoders = encodersParameters
@@ -217,6 +248,7 @@ def setupProcessors():
     
     RequestHandler.processors = processors
     RequestHandler.encodersHeader = encodersHeader
+    RequestHandler.server_version = 'AllyREST/' + __version__
 
 # --------------------------------------------------------------------
 
@@ -227,4 +259,5 @@ def setupAll():
     setupAssemblers()
     setupResourcesManager()
     setupProcessorsEncoding()
+    setupProcessorsDecoding()
     setupProcessors()

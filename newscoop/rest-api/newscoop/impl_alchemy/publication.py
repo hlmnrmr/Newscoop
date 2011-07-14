@@ -60,10 +60,14 @@ class PublicationServiceAlchemy(IPublicationService, SessionSupport):
     # ---------------------------------------------
  
     def insert(self, entity):
-        raise NotImplemented
+        assert isinstance(entity, Publication)
+        self.session().add(entity)
+        self.session().flush((entity,))
+        return entity.Id
 
     def update(self, entity):
-        raise NotImplemented
+        self.session().merge(entity)
+        return True
 
     def delete(self, id):
         return self.session().query(Publication).filter(pm.Id == id).delete() > 0
