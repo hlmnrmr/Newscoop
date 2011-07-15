@@ -31,11 +31,14 @@ from ally.http.processor.uri import URIHandler
 from ally.http.server import RequestHandler
 from ally.core.impl.processor.method_validation import MethodValidationHandler
 from ally.core.impl.processor.decoding import DecodingHandler
+from ally.core.impl.assembler import AssembleGetAllByOther
 
 # --------------------------------------------------------------------
 
 __version__ = '0.1'
 
+specificationEngine = None
+# The engine to use by the decoders.
 serverLocation = None
 # To be injected before setup, provides the location of the server.
 serverPort = None
@@ -46,8 +49,8 @@ services = None
 # --------------------------------------------------------------------
 # The configurations for content type and character sets.
 contentTypes = {
-                ct.XML:['text/xml', 'text/plain', 'application/xml'],
-                ct.JSON:['text/json', 'application/json']
+                ct.XML:['text/xml', 'text/plain', 'application/xml', 'xml'],
+                ct.JSON:['text/json', 'application/json', 'json']
                 }
 
 charSets = {
@@ -124,9 +127,10 @@ assembleInsert = ass.AssembleInsert()
 assembleUpdateIdModel = ass.AssembleUpdateIdModel()
 assembleUpdateModel = ass.AssembleUpdateModel()
 assembleDelete = ass.AssembleDelete()
+assembleGetAllByOther = AssembleGetAllByOther()
 # ---------------------------------
 assemblers = [assembleGetAll, assembleGetById, assembleInsert, assembleUpdateIdModel, assembleUpdateModel,
-              assembleDelete]
+              assembleDelete, assembleGetAllByOther]
 
 def setupAssemblers():
     initialize(assembleGetAll)
@@ -135,6 +139,7 @@ def setupAssemblers():
     initialize(assembleUpdateIdModel)
     initialize(assembleUpdateModel)
     initialize(assembleDelete)
+    initialize(assembleGetAllByOther)
 
 # --------------------------------------------------------------------
 # Creating the encoding processors
@@ -180,9 +185,11 @@ processorsDecoding = Processors()
 
 def setupProcessorsDecoding():
     decodingXML.converter = converterContent
+    decodingXML.specificationEngine = specificationEngine
     initialize(decodingXML)
     
     decodingJSON.converter = converterContent
+    decodingJSON.specificationEngine = specificationEngine
     initialize(decodingJSON)
     
     processorsDecoding.processors = handlersDecoding

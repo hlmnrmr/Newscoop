@@ -9,7 +9,7 @@ Created on Jun 16, 2011
 API specifications for resources.
 '''
 
-from newscoop.api.entity import Entity, IEntityService, QEntity
+from newscoop.api import Entity, IEntityService, QEntity
 from ally.core.api.configure import APIModel as model, APIService as service, \
     APIQuery as query, APICall as call
 from ally.core.api.criteria import AsLike

@@ -11,12 +11,13 @@ Provides the configurations for the services.
 
 from ally.core.tools.dummy import ServiceDummy
 from newscoop.api import resource, theme
-
 from newscoop.impl_alchemy.publication import PublicationServiceAlchemy
-from newscoop.impl_alchemy import AlchemySessionHandler
+from ally.core.support.sql_alchemy import AlchemySessionHandler
 from ally.http import server_config
 from ally.core.util import initialize
 from newscoop import php_client_config
+from newscoop.impl_alchemy.section import SectionServiceAlchemy
+from newscoop.impl_alchemy.issue import IssueServiceAlchemy
 
 # --------------------------------------------------------------------
 
@@ -47,16 +48,23 @@ def setupProcessors():
 # Creating the services
 
 resourceService = ServiceDummy(resource.IResourceService)
-publicationService = PublicationServiceAlchemy()
 themeService = ServiceDummy(theme.IThemeService)
+publicationService = PublicationServiceAlchemy()
+sectionService = SectionServiceAlchemy()
+issueService = IssueServiceAlchemy()
+
 # ---------------------------------
-server_config.services = [resourceService, publicationService, themeService]
+server_config.services = [resourceService, publicationService, sectionService, themeService, issueService]
 
 def setupServices():
     resourceService.resourcesManager = resourcesManager
     initialize(resourceService)
     
     initialize(publicationService)
+    
+    initialize(sectionService)
+    
+    initialize(issueService)
     
     themeService.resourcesManager = resourcesManager
     initialize(themeService)

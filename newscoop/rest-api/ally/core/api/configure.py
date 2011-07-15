@@ -132,7 +132,8 @@ class APIModel(Callable):
             model = Model(modelClass, properties)
         else:
             assert isinstance(model, Model)
-            allProperties = dict(model.properties)
+            # Cloning the inherited properties, since they have to belong now to this model.
+            allProperties = {prop.name:Property(prop.name, prop.type) for prop in model.properties.values()}
             allProperties.update(properties)
             model = Model(modelClass, allProperties)
         propertiesFor(modelClass, model)
@@ -216,8 +217,8 @@ class APIEntry():
         active = self._obtainActive(instance, query, crtEntry)
         criterias = crtEntry.criteria
         for cond in DEFAULT_CONDITIONS:
-            if cond in criterias:
-                crt = criterias[cond]
+            crt = criterias.get(cond, None)
+            if crt is not None:
                 assert isinstance(crt, Property)
                 crt.set(active, value)
                 return

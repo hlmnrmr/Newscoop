@@ -9,13 +9,13 @@ Created on Jun 18, 2011
 Provides the call assemblers used in constructing the resources node.
 '''
 
-from ally.core.api.type import TypeProperty, TypeModel, TypeId, Iter, Input,\
-    isPropertyTypeId
+from ally.core.api.operator import Model, Property
+from ally.core.api.type import TypeProperty, TypeModel, TypeId, Iter, Input, \
+    isPropertyTypeId, isTypeId
 from ally.core.impl.node import NodeModel, NodeId
 from ally.core.spec.resources import Assembler, Node, Invoker
 import abc
 import logging
-from ally.core.api.operator import Model, Property
 
 # --------------------------------------------------------------------
 
@@ -208,7 +208,7 @@ class AssembleUpdateModel(AssembleInvokers):
         propertyId = None
         for prop in model.properties.values():
             assert isinstance(prop, Property)
-            if isinstance(prop.type, TypeId) and prop.type.forClass() == int:
+            if isTypeId(prop.type):
                 propertyId = prop
                 break
         if propertyId is None:
@@ -245,6 +245,43 @@ class AssembleDelete(AssembleInvokers):
         assert node.delete is None, 'There is already a delete assigned for %' % node
         node.delete = invoker
         log.info('Resolved invoker %s as a delete for model %s', invoker, typeId.model)
+        return True
+    
+class AssembleGetAllByOther(AssembleInvokers):
+    '''
+    Resolving the get all for models by other entity id, 
+    methods presentation: Iter(Entity.Id)%(OtherEntity.Id,[defaults])
+    '''
+        
+    def assembleInvoke(self, root, invoker):
+        '''
+        @see: AssembleInvokers.resolve
+        '''
+        assert isinstance(root, Node), 'Invalid node %s' % root
+        assert isinstance(invoker, Invoker), 'Invalid invoker %s' % invoker
+        if not (isinstance(invoker.outputType, Iter) and invoker.mandatoryCount == 1):
+            return False
+        typeProperty = invoker.inputs[0].type
+        if not isPropertyTypeId(typeProperty):
+            return False
+        typ = invoker.outputType.itemType
+        if isinstance(typ, TypeModel):
+            model = typ.model
+        elif isinstance(typ, TypeProperty) and isinstance(typ.property.type, TypeId):
+            model = typ.model
+        else:
+            return False
+        assert isinstance(typeProperty, TypeProperty)
+        otherModel = typeProperty.model
+        if otherModel == model:
+            log.warning('The input model %s it should be other model than the one returned %s for ' + \
+                        'invoker %s', otherModel, model, invoker)
+            return False
+        nodeModelOtherId = _obtainNodeId(_obtainNodeModel(root, otherModel), typeProperty)
+        node = _obtainNodeModel(nodeModelOtherId, model)
+        assert node.get is None, 'There is already a get assigned for %' % node
+        node.get = invoker
+        log.info('Resolved invoker %s as a get all for model %s by model %s', invoker, model, otherModel)
         return True
 
 # --------------------------------------------------------------------

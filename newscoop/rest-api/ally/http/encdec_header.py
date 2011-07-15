@@ -197,9 +197,10 @@ class DecoderAcceptContentType(DecoderHeader):
         @see: DecoderHeader.decode
         '''
         assert isinstance(req, RequestHTTP), 'Invalid HTTP request %s' % req
-        if self.name in req.headers:
+        header = req.headers.get(self.name, None)
+        if header is not None:
             req.accContentTypes = []
-            vals = self.reSeparators.split(req.headers[self.name])
+            vals = self.reSeparators.split(header)
             for val in vals:
                 contentType = findInValues(self.contentTypes, val)
                 if contentType is not None: req.accContentTypes.append(contentType)
@@ -230,9 +231,10 @@ class DecoderAcceptCharSet(DecoderHeader):
         @see: DecoderHeader.decode
         '''
         assert isinstance(req, RequestHTTP), 'Invalid HTTP request %s' % req
-        if self.name in req.headers:
+        header = req.headers.get(self.name, None)
+        if header is not None:
             req.accCharSets = []
-            vals = self.reSeparators.split(req.headers[self.name])
+            vals = self.reSeparators.split(header)
             for val in vals:
                 charSet = findInValues(self.charSets, val)
                 if charSet is not None: req.accCharSets.append(charSet)

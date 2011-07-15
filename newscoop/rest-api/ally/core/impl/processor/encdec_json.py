@@ -10,7 +10,8 @@ Provides the JSON encoding handler.
 '''
 
 from _pyio import TextIOWrapper
-from ally.core.api.operator import Model, Property
+from ally.core.api.exception import InputException
+from ally.core.api.operator import Model, Property, PropertySepcification
 from ally.core.api.type import TypeProperty, typeFor, Iter, isPropertyTypeId, \
     TypeModel, Input, isTypeId
 from ally.core.impl.node import NodeModel
@@ -21,11 +22,10 @@ from ally.core.spec.presenting import EncoderPath
 from ally.core.spec.resources import Path, Converter, ResourcesManager, Invoker
 from ally.core.spec.server import Processor, Request, Response, ProcessorsChain, \
     INSERT, UPDATE, Content
-from ally.core.util import injected, simpleName
+from ally.core.util import injected
 import codecs
 import json
 import logging
-from ally.core.api.exception import InputException
 
 # --------------------------------------------------------------------
 
@@ -154,11 +154,15 @@ class DecodingJSONHandler(Processor):
     # The converter used by the decoder.
     charSetDefault = cs.ISO_1
     # The default character set to be used if none provided for the content.
+    specificationEngine = None
+    # The name of the specification engine to be considered for additional validation by the decoder.
     
     def __init__(self):
         assert isinstance(self.converter, Converter), 'Invalid Converter object %s' % self.converter
         assert isinstance(self.charSetDefault, str), 'Invalid default character set %s' % self.charSetDefault
-
+        assert self.specificationEngine is None or isinstance(self.specificationEngine, str), \
+        'Invalid specification engine name %s, can be None' % self.specificationEngine
+        
     def process(self, req, rsp, chain):
         '''
         @see: Processor.process
@@ -199,25 +203,39 @@ class DecodingJSONHandler(Processor):
             
     def _decodeModel(self, obj, model):
         assert isinstance(model, Model)
+        objCount = 1
         modelName = self.converter.normalize(model.name)
-        if len(obj) != 1 and obj.keys[0] != modelName:
-            raise InputException(_('Invalid keys ($1), expected key ($2)', obj.keys(), modelName))
-        obj = obj[modelName]
+        modelObj = obj.pop(modelName, None)
+        if modelObj is None:
+            raise InputException(_('Expected key ($1) for object count $2', modelName, objCount))
+        if len(obj) > 0:
+            raise InputException(_('Unknown keys ($1) for object count $2', \
+                                   ', '.join(str(key) for key in obj.keys()), objCount))
+        objCount += 1
+        obj = modelObj
         mi = model.createModel()
         for prop in model.properties.values():
             assert isinstance(prop, Property)
             if not isTypeId(prop.type):
                 propName = self.converter.normalize(prop.name)
+                spec = None
+                if self.specificationEngine is not None:
+                    spec = prop.sepcificationFor(self.specificationEngine)
+                    if spec is not None:
+                        assert isinstance(spec, PropertySepcification)
                 if propName in obj:
-                    value = obj[propName]
-                    del obj[propName]
-                    try:
-                        prop.set(mi, value)
-                    except InputException as e:
-                        assert isinstance(e, InputException)
-                        raise InputException(_('Invalid value ($1) for ($2), expected type ($3)', \
-                                               value, propName, simpleName(prop.type.forClass())))
-                        log.warning('Problems setting property from JSON: %s', e.message.default)
+                    value = obj.pop(propName)
+                    if not prop.type.isValid(value):
+                        raise InputException(_('Invalid value ($1) for ($2), expected type ($3) for ' + 
+                        'object count $4', value, propName, prop.type, objCount))
+                        log.warning('Problems setting property (%s) from JSON value %s', propName, value)
+                    if spec is not None and not spec.isValidLength(value):
+                        raise InputException(_('Expected a maximum length of $1 for ($2), at ' + 
+                        'object count $3', spec.length, propName, objCount))
+                    prop.set(mi, value)
+                elif spec is not None and spec.isRequired:
+                    raise InputException(_('Required a value for ($1) at object count $2', \
+                                           propName, objCount))
         if len(obj) > 0:
-            raise InputException(_('Invalid keys ($1)', obj.keys()))
+            raise InputException(_('Unknown keys ($1)', ', '.join(str(key) for key in obj.keys())))
         return mi

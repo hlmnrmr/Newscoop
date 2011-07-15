@@ -9,10 +9,9 @@ Created on Jul 11, 2011
 Provides the XML encoding handler.
 '''
 
-from _abcoll import Callable
 from _pyio import TextIOWrapper
 from ally.core.api.exception import InputException
-from ally.core.api.operator import Model, Property
+from ally.core.api.operator import Model, Property, PropertySepcification
 from ally.core.api.type import TypeProperty, typeFor, Iter, TypeModel, \
     isPropertyTypeId, Input, isTypeId
 from ally.core.impl.node import NodeModel
@@ -24,7 +23,6 @@ from ally.core.spec.resources import Path, ResourcesManager, Converter, Invoker
 from ally.core.spec.server import Processor, Request, Response, ProcessorsChain, \
     INSERT, UPDATE, Content
 from ally.core.util import injected, guard
-from inspect import isclass
 from xml.sax import make_parser
 from xml.sax._exceptions import SAXParseException
 from xml.sax.handler import ContentHandler
@@ -185,11 +183,15 @@ class DecodingXMLHandler(Processor):
     # The converter used by the decoder.
     charSetDefault = cs.ISO_1
     # The default character set to be used if none provided for the content.
+    specificationEngine = None
+    # The name of the specification engine to be considered for additional validation by the decoder.
     
     def __init__(self):
         assert isinstance(self.converter, Converter), 'Invalid Converter object %s' % self.converter
         assert isinstance(self.charSetDefault, str), 'Invalid default character set %s' % self.charSetDefault
-    
+        assert self.specificationEngine is None or isinstance(self.specificationEngine, str), \
+        'Invalid specification engine name %s, can be None' % self.specificationEngine
+        
     def process(self, req, rsp, chain):
         '''
         @see: Processor.process
@@ -228,11 +230,14 @@ class DecodingXMLHandler(Processor):
     def _createModel(self, model):
         assert isinstance(model, Model)
         root = RuleRoot()
-        rmodel = root.addRule(RuleCreate(model.createModel), self.converter.normalize(model.name))
+        rmodel = root.addRule(RuleModel(model), self.converter.normalize(model.name))
         for prop in model.properties.values():
             assert isinstance(prop, Property)
             if not isTypeId(prop.type):
-                rmodel.addRule(RuleSetContent(prop.set, prop.type.forClass(), self.converter), \
+                spec = None
+                if self.specificationEngine is not None:
+                    spec = prop.sepcificationFor(self.specificationEngine)
+                rmodel.addRule(RuleSetProperty(prop, spec, self.converter), \
                                self.converter.normalize(prop.name))
         return root
 
@@ -327,7 +332,7 @@ class Digester(ContentHandler):
                                    path, node.path, self.getLineNumber(), self.getColumnNumber()))
         for rule in node.rules:
             assert isinstance(rule, Rule)
-            rule.end(self)
+            rule.end(node, self)
             
     def getLineNumber(self):
         return self._parser.getLineNumber()
@@ -423,66 +428,83 @@ class Rule:
             The content of the element.
         '''
     
-    def end(self, digester):
+    def end(self, node, digester):
         '''
         Called at element end.
         
+        @param node: Node
+            The node containing the rule.
         @param digester: Digester
             The processing digester.
         '''
 
 # --------------------------------------------------------------------
 
-class RuleCreate(Rule):
+class RuleModel(Rule):
     '''
     Rule implementation that provides the creation of an object at begin.
     '''
     
-    def __init__(self, create):
+    def __init__(self, model):
         '''
-        @param create: Callable
-            The create Callable that will be used in creating the object, no arguments will be passed
-            to this construct.
+        @param model: Model
+            The model to create instances for.
         '''
-        assert isinstance(create, Callable), 'Invalid create callable %s' % create
-        self._create = create
+        assert isinstance(model, Model), 'Invalid model %s' % model
+        self._model = model
         
     def begin(self, digester):
         '''
         @see: Rule.begin
         '''
         assert isinstance(digester, Digester)
-        digester.stack.append(self._create())
+        digester.stack.append(self._model.createModel())
         
-    def end(self, digester):
+    def end(self, node, digester):
         '''
         @see: Rule.end
         '''
+        assert isinstance(node, Node)
+        assert isinstance(digester, Digester)
         if len(digester.stack) > 1:
-            digester.stack.pop()
-
+            value = digester.stack.pop()
+        elif len(digester.stack) > 0:
+            value = digester.stack[0]
+        else:
+            value = None
+        if value is not None:
+            for path, kid in node.childrens.items():
+                for rule in kid.rules:
+                    if isinstance(rule, RuleSetProperty):
+                        assert isinstance(rule, RuleSetProperty)
+                        if not rule.isValid(value):
+                            raise InputException(_('In path ($1) expected tag ($2), at line $3 and ' + \
+                         'column $4', node.path, path, digester.getLineNumber(), \
+                         digester.getColumnNumber()))
+            
 # --------------------------------------------------------------------
 
-class RuleSetContent(Rule):
+class RuleSetProperty(Rule):
     '''
     Rule implementation that sets the content of an element to the closest stack object.
     '''
     
-    def __init__(self, setter, valueType, valueConverter):
+    def __init__(self, property, specification, valueConverter):
         '''
-        @param setter: Callable
-            The callable to be used in setting the value, this will receive as the first argument the
+        @param property: Property
+            The property to be used in setting the value, this will receive as the first argument the
             last stack object and as a second the value to set.
-        @param valueType: type
-            The type of the value to be set.
+        @param specification: PropertySpecification
+            The specification to be used in checking the value.
         @param valueConverter: Converter
             The converter to be used in transforming the content to the required value type.
         '''
-        assert isinstance(setter, Callable), 'Invalid setter callable %s' % setter
-        assert isclass(valueType), 'Invalid value type %s' % valueType
+        assert isinstance(property, Property), 'Invalid property %s' % property
+        assert specification is None or isinstance(specification, PropertySepcification), \
+        'Invalid property specification %s' % specification
         assert isinstance(valueConverter, Converter), 'Invalid value converter %s' % valueConverter
-        self._setter = setter
-        self._valueType = valueType
+        self._property = property
+        self._specification = specification
         self._valueConverter = valueConverter
     
     def content(self, digester, content):
@@ -491,10 +513,20 @@ class RuleSetContent(Rule):
         '''
         assert isinstance(digester, Digester)
         assert len(digester.stack) > 0, \
-        'Invalid structure there is no stack object to use for setting value on path %s' % digester.currentPath()
+        'Invalid structure there is no stack object to use for setting value on path %s' % \
+        digester.currentPath()
         try:
-            value = self._valueConverter.asValue(content, self._valueType)
+            value = self._valueConverter.asValue(content, self._property.type.forClass())
         except ValueError:
             raise InputException(_('Invalid value ($1) expected type $2 on path $3 at line $4 and column $5', \
-            content, self._valueType, digester.currentPath(), digester.getLineNumber(), digester.getColumnNumber()))
-        self._setter(digester.stack[-1], value)
+    content, self._valueType, digester.currentPath(), digester.getLineNumber(), digester.getColumnNumber()))
+        if self._specification is not None and not self._specification.isValidLength(value):
+            raise InputException(_('Expected a maximum length of $1, at line $2 and column $3', \
+                        self._specification.length, digester.getLineNumber(), digester.getColumnNumber()))
+        self._property.set(digester.stack[-1], value)
+        
+    def isValid(self, value):
+        if self._specification is not None and self._specification.isRequired:
+            if self._property.get(value) is None:
+                return False
+        return True

@@ -11,21 +11,18 @@ SQL alchemy implementation for publication API.
 
 from ally.core.api.exception import InputException
 from ally.core.internationalization import msg as _
-from ally.core.util import injected
+from ally.core.support.sql_alchemy import SessionSupport, mapperModel
 from newscoop.api.publication import IPublicationService, Publication, \
     QPublication
 from newscoop.impl_alchemy.meta import publication as pm
 from sqlalchemy.orm.exc import NoResultFound
-import logging
-from newscoop.impl_alchemy import SessionSupport
 
 # --------------------------------------------------------------------
 
-log = logging.getLogger(__name__)
+mapperModel(Publication, pm.table)
 
 # --------------------------------------------------------------------
 
-@injected
 class PublicationServiceAlchemy(IPublicationService, SessionSupport):
     '''
     Test implementation for @see: IPublicationService

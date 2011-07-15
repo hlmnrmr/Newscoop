@@ -6,16 +6,19 @@ Created on Jul 7, 2011
 @license http://www.gnu.org/licenses/gpl-3.0.txt
 @author: Gabriel Nistor
 
-Contains the SQL alchemy meta for publication API.
+Contains the SQL alchemy meta for section API.
 '''
 
 from newscoop.impl_alchemy.meta import meta
-from sqlalchemy.schema import Table, Column
+from sqlalchemy.schema import Table, Column, ForeignKey
 from sqlalchemy.types import Integer, String
 
 # --------------------------------------------------------------------
 
 Id = Column('id', Integer, primary_key=True, key='Id')
 Name = Column('name', String(100), nullable=False, key='Name')
+Description = Column('description', String(200), nullable=True, key='Description')
 
-table = Table('publication', meta, Id, Name, mysql_engine='InnoDB')
+publication = Column('publication_id', ForeignKey('publication.Id'), nullable=True)
+
+table = Table('section', meta, Id, Name, Description, publication, mysql_engine='InnoDB')

@@ -11,7 +11,7 @@ Provides the containers that describe the APIs.
 
 from _abcoll import Iterable
 from ally.core.api.exception import InputException, OutputException
-from ally.core.api.type import Type, TypeClass, Input
+from ally.core.api.type import Type, TypeClass, Input, String
 from ally.core.internationalization import msg as _
 from ally.core.util import simpleName, guard
 from inspect import ismodule, getargspec, isclass
@@ -73,6 +73,8 @@ class Property:
             The Type of the property.
         @ivar _var: string
             Contains the name of the attribute that will be used for keeping the property value.
+        @ivar _sepcification: dictionary
+            Contains specifications for the properties.
         '''
         assert isinstance(name, str) and str != '', 'Provide a valid name'
         assert isinstance(type, Type), 'Invalid type %s' % type
@@ -80,6 +82,7 @@ class Property:
         self.name = name
         # The name of the attributes that are placed in the model automatically.
         self._var = PROPERTY_PREFIX + name
+        self._sepcification = {}
     
     def get(self, model):
         '''
@@ -129,6 +132,27 @@ class Property:
             return True
         return False
     
+    def sepcificationFor(self, engine, specification=None):
+        '''
+        Provides or register the property specification for the provided engine name.
+        
+        @param engine: string
+            The engine name for which to get the specification.
+        @param specification: PropertySepcification
+            If provided will be registered for the provided engine.
+        @return: PropertySepcification|None
+            The property specification registered for the engine, None if no such specification
+            has been registered.
+        '''
+        assert isinstance(engine, str), 'Invalid engine name %s' % engine
+        assert specification is None or isinstance(specification, PropertySepcification), \
+        'Invalid property specification %s' % specification
+        if specification is not None:
+            self._sepcification[engine] = specification
+        else:
+            specification = self._sepcification.get(engine, None)
+        return specification
+    
     def __eq__(self, other):
         if isinstance(other, self.__class__):
             return self.name == other.name and self.type == other.type
@@ -136,6 +160,45 @@ class Property:
 
     def __str__(self):
         return '<%s[%s = %s]>' % (simpleName(self), self.name, self.type)
+
+@guard
+class PropertySepcification:
+    '''
+    Provides additional specification for a property that are not in the normal property definition.
+    '''
+    
+    def __init__(self, property, isRequired, length):
+        '''
+        Constructs the specification based on the provided data.
+        
+        @param property: Property
+            The property owning the specification.
+        @param isRequire: boolean
+            True if the property is required, false otherwise.
+        @param length: integer|None
+            The maximum length of the data associated with the property, this will be used only for property
+            types that support this.
+        '''
+        assert isinstance(property, Property), 'Invalid property %s' % property
+        assert isinstance(isRequired, bool), 'Invalid is required flag %s' % isRequired
+        assert length is None or isinstance(length, int), 'Invalid length %s' % length
+        self.property = property
+        self.isRequired = isRequired
+        self.length = length
+        
+    def isValidLength(self, obj):
+        '''
+        Will check if the length is valid in relation to this specification. The check will only occur if the
+        represented property has type of such a nature.
+        
+        @param obj: object
+            The object to check.
+        @return: boolean
+            True if the object is valid in length.
+        '''
+        if isinstance(obj, str) and self.property.type == String.api_type and self.length is not None:
+            return len(obj) < self.length
+        return True
 
 # --------------------------------------------------------------------
 
