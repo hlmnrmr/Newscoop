@@ -10,7 +10,7 @@ Provides the invoking handler.
 '''
 
 from ally.core.api.exception import InputException
-from ally.core.api.type import isBool, isPropertyTypeId, typeFor
+from ally.core.api.type import isBool, isPropertyTypeId
 from ally.core.internationalization import msg as _
 from ally.core.spec.codes import INTERNAL_ERROR, RESOURCE_NOT_FOUND, \
     DELETED_SUCCESS, CANNOT_DELETE, UPDATE_SUCCESS, CANNOT_UPDATE, \
@@ -69,25 +69,24 @@ class InvokingHandler(Processor):
             argsDict.update(req.arguments)
             try:
                 value = self._invoke(invoker, argsDict, rsp)
-                if isPropertyTypeId(invoker.outputType):
-                    typ = invoker.outputType
-                    if value is not None:
-                        path = self.resourcesManager.findShortPath(typeFor(typ.model.modelClass), typ)
-                        if path is not None:
-                            path.update(value, invoker.outputType)
-                            rsp.contentLocation = path
-                        else:
-                            req.objType = invoker.outputType
-                            req.obj = value
-                    else:
-                        rsp.setCode(CANNOT_INSERT, _('Cannot insert'))
-                        log.debug('Cannot updated resource')
-                        return
-                else:
-                    req.objType = invoker.outputType
-                    req.obj = value
-                rsp.setCode(INSERT_SUCCESS, _('Successfully created'))
             except: return
+            if isPropertyTypeId(invoker.outputType):
+                if value is not None:
+                    path = self.resourcesManager.findGetModel(req.resourcePath, invoker.outputType.model)
+                    if path is not None:
+                        path.update(value, invoker.outputType)
+                        rsp.contentLocation = path
+                    else:
+                        req.objType = invoker.outputType
+                        req.obj = value
+                else:
+                    rsp.setCode(CANNOT_INSERT, _('Cannot insert'))
+                    log.debug('Cannot updated resource')
+                    return
+            else:
+                req.objType = invoker.outputType
+                req.obj = value
+            rsp.setCode(INSERT_SUCCESS, _('Successfully created'))
         elif req.method == UPDATE: # Updating
             invoker = node.update
             assert isinstance(invoker, Invoker)
@@ -95,37 +94,37 @@ class InvokingHandler(Processor):
             argsDict.update(req.arguments)
             try:
                 value = self._invoke(invoker, argsDict, rsp)
-                if isBool(invoker.outputType):
-                    if value == True:
-                        rsp.setCode(UPDATE_SUCCESS, _('Successfully updated'))
-                        log.debug('Successful updated resource')
-                    else:
-                        rsp.setCode(CANNOT_UPDATE, _('Cannot updated'))
-                        log.debug('Cannot updated resource')
-                    return
-                else:
-                    #If an entity is returned than we will render that.
-                    req.objType = invoker.outputType
-                    req.obj = value
             except: return
+            if isBool(invoker.outputType):
+                if value == True:
+                    rsp.setCode(UPDATE_SUCCESS, _('Successfully updated'))
+                    log.debug('Successful updated resource')
+                else:
+                    rsp.setCode(CANNOT_UPDATE, _('Cannot updated'))
+                    log.debug('Cannot updated resource')
+                return
+            else:
+                #If an entity is returned than we will render that.
+                req.objType = invoker.outputType
+                req.obj = value
         elif req.method == DELETE: # Deleting
             invoker = node.delete
             assert isinstance(invoker, Invoker)
             try:
                 value = self._invoke(invoker, path.toArguments(invoker), rsp)
-                if isBool(invoker.outputType):
-                    if value == True:
-                        rsp.setCode(DELETED_SUCCESS, _('Successfully deleted'))
-                        log.debug('Successful deleted resource')
-                    else:
-                        rsp.setCode(CANNOT_DELETE, _('Cannot delete'))
-                        log.debug('Cannot deleted resource')
-                    return
-                else:
-                    #If an entity is returned than we will render that.
-                    req.objType = invoker.outputType
-                    req.obj = value
             except: return
+            if isBool(invoker.outputType):
+                if value == True:
+                    rsp.setCode(DELETED_SUCCESS, _('Successfully deleted'))
+                    log.debug('Successful deleted resource')
+                else:
+                    rsp.setCode(CANNOT_DELETE, _('Cannot delete'))
+                    log.debug('Cannot deleted resource')
+                return
+            else:
+                #If an entity is returned than we will render that.
+                req.objType = invoker.outputType
+                req.obj = value
         else:
             raise AssertionError('Cannot process request method %s' % req.method)
         chain.process(req, rsp)

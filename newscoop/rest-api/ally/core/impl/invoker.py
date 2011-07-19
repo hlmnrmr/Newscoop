@@ -10,8 +10,9 @@ Provides the invokers implementations.
 '''
 
 from _abcoll import Callable
-from ally.core.api.operator import Service, Call
+from ally.core.api.operator import Service, Call, Property
 from ally.core.spec.resources import Invoker
+from ally.core.api.type import TypeProperty, Input
 
 # --------------------------------------------------------------------
 
@@ -67,3 +68,30 @@ class InvokerFunction(Invoker):
         @see: InvokerCall.invoke
         '''
         return self.function(*args)
+
+# --------------------------------------------------------------------
+
+class InvokerUpdateModel(Invoker):
+    '''
+    Wraps an update invoker that has the signature like bool%(Entity) to look like bool%(Entity.Id, Entity) which
+    is the form that is called by the delete action.
+    '''
+    
+    def __init__(self, invoker, typeProperty):
+        assert isinstance(invoker, Invoker), 'Invalid invoker %s' % invoker
+        assert isinstance(typeProperty, TypeProperty), 'Invalid type property %s' % typeProperty
+        modelInput = invoker.inputs[0]
+        inputs = [Input(modelInput.name + 'Id', typeProperty), modelInput]
+        super().__init__(invoker.outputType, invoker.name, inputs, len(inputs))
+        self.invoker = invoker
+        self.property = typeProperty.property
+        
+    def invoke(self, *args):
+        '''
+        First argument is the id and the second the entity.
+        @see: Invoker.invoke
+        '''
+        prop = self.property
+        assert isinstance(prop, Property)
+        prop.set(args[1], args[0])
+        return self.invoker.invoke(args[1])

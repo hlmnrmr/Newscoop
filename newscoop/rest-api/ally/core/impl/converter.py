@@ -55,4 +55,4 @@ class Standard(Converter):
         assert not (decValue != None and parse != None), 'Only one value needs to be provided'
         if decValue is not None:
             return str(decValue)
-        return float(decValue)
+        return float(parse)

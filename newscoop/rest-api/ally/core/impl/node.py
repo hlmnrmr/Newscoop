@@ -68,6 +68,12 @@ class MatchString(Match):
         assert isinstance(converter, Converter)
         return converter.normalize(self.matchValue)
     
+    def clone(self):
+        '''
+        @see: Match.clone
+        '''
+        return self
+    
     def __eq__(self, other):
         if isinstance(other, self.__class__):
             return self.matchValue == other.matchValue
@@ -136,6 +142,12 @@ class MatchId(Match):
         assert self.matchValue is not None, 'Cannot represent the path element, there is no value'
         return converter.asString(self.matchValue)
     
+    def clone(self):
+        '''
+        @see: Match.clone
+        '''
+        return MatchId(self.node, self.matchValue)
+    
     def __eq__(self, other):
         return isinstance(other, MatchId)
 
@@ -155,7 +167,7 @@ class NodeRoot(Node):
         @param get: Invoker
             The get invoker for the root node.
         '''
-        super().__init__(None, ORDER_ROOT)
+        super().__init__(None, True, ORDER_ROOT)
         assert isinstance(get, Invoker), 'Invalid get invoker %s' % get
         assert len(get.inputs) == 0, 'No inputs are allowed for the get on the root node'
         self.get = get
@@ -180,26 +192,26 @@ class NodeRoot(Node):
 
 # --------------------------------------------------------------------
 
-class NodeModel(Node):
+class NodePath(Node):
     '''
-    Provides a node that matches model elements.
+    Provides a node that matches a simple string path element.
     
     @see: Node
     '''
     
-    def __init__(self, parent, model):
+    def __init__(self, parent, isGroup, name):
         '''
         @see: Node.__init__
         
-        @param model: Model
-            The model to make the matching based on.
+        @param name: string
+            The plain name to be used for the path node.
         @ivar _match: MatchString
             The match corresponding to this node.
         '''
-        assert isinstance(model, Model), 'Invalid model %s' % model
-        self.model = model
-        self._match = MatchString(self, model.name)
-        super().__init__(parent, ORDER_STRING)
+        assert isinstance(name, str) and name != '', 'Invalid node name %s' % name
+        self.name = name
+        self._match = MatchString(self, name)
+        super().__init__(parent, isGroup, ORDER_STRING)
 
     def tryMatch(self, converter, paths):
         '''
@@ -221,11 +233,31 @@ class NodeModel(Node):
 
     def __eq__(self, other):
         if isinstance(other, self.__class__):
-            return self.model == other.model
+            return self.name == other.name
         return False
     
     def __str__(self):
-        return '<%s[%s]>' % (simpleName(self), self.model)
+        return '<%s[%s]>' % (simpleName(self), self.name)
+
+class NodeModel(NodePath):
+    '''
+    Provides a node that matches model elements.
+    
+    @see: Node
+    '''
+    
+    def __init__(self, parent, model):
+        '''
+        @see: Node.__init__
+        
+        @param model: Model
+            The model to make the matching based on.
+        @ivar _match: MatchString
+            The match corresponding to this node.
+        '''
+        assert isinstance(model, Model), 'Invalid model %s' % model
+        self.model = model
+        super().__init__(parent, True, model.name)
 
 class NodeId(Node):
     '''
@@ -247,7 +279,7 @@ class NodeId(Node):
         assert typeId.forClass() == int, \
         'Invalid type id class %s needs to be integer' % typeId.forClass()
         self.typeId = typeId
-        super().__init__(parent, ORDER_INTEGER)
+        super().__init__(parent, False, ORDER_INTEGER)
 
     def tryMatch(self, converter, paths):
         '''

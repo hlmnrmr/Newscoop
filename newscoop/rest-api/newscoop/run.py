@@ -13,7 +13,7 @@ Used for starting the web server.
 
 import logging
 from ally.core import util
-util.GUARD_ENABLED = False #__debug__
+util.GUARD_ENABLED = False#__debug__
 logging.basicConfig(level=logging.DEBUG if __debug__ else logging.WARN)
 #logging.basicConfig(level=logging.DEBUG)
 #logging.basicConfig(level=logging.WARNING)
@@ -29,7 +29,9 @@ from newscoop.impl_alchemy.meta import meta, section
 # --------------------------------------------------------------------
 
 if __name__ == '__main__':
-    engine = create_engine("sqlite:///newscoop.db", encoding='utf8', echo=__debug__)
+    #engine = create_engine("sqlite:///newscoop.db", encoding='utf8', echo=__debug__)
+    engine = create_engine("mysql+mysqlconnector://root:admin@localhost/alchtest", \
+                           pool_recycle=3600, echo=__debug__, echo_pool=__debug__)
     #meta.drop_all(engine, tables=(section.table,))
     meta.create_all(engine)
 

@@ -12,13 +12,12 @@ Provides the JSON encoding handler.
 from _pyio import TextIOWrapper
 from ally.core.api.exception import InputException
 from ally.core.api.operator import Model, Property, PropertySepcification
-from ally.core.api.type import TypeProperty, typeFor, Iter, isPropertyTypeId, \
+from ally.core.api.type import TypeProperty, Iter, isPropertyTypeId, \
     TypeModel, Input, isTypeId
-from ally.core.impl.node import NodeModel
+from ally.core.impl.node import NodePath
 from ally.core.internationalization import msg as _
 from ally.core.spec import charset as cs, content_type as ct
 from ally.core.spec.codes import BAD_CONTENT
-from ally.core.spec.presenting import EncoderPath
 from ally.core.spec.resources import Path, Converter, ResourcesManager, Invoker
 from ally.core.spec.server import Processor, Request, Response, ProcessorsChain, \
     INSERT, UPDATE, Content
@@ -75,18 +74,18 @@ class EncodingJSONHandler(Processor):
             elif isinstance(typ, Iter):
                 assert isinstance(typ, Iter)
                 if typ.forClass() == Path:
-                    obj = self._ruleListPath(req.obj, rsp.encoderPath)
+                    obj = self._convertListPath(req.obj, rsp)
                 elif isPropertyTypeId(typ.itemType):
-                    obj = self._ruleListIds(req.obj, typ.itemType, rsp.encoderPath)
+                    obj = self._convertListIds(req.obj, typ.itemType, req, rsp)
                 elif isinstance(typ.itemType, TypeModel):
-                    obj = self._ruleListModels(req.obj, typ.itemType.model)
+                    obj = self._convertListModels(req.obj, typ.itemType.model, req, rsp)
                 else:
                     raise AssertionError('Cannot encode list item object type %s' % typ.itemType)
             elif isPropertyTypeId(typ):
-                path = self.resourcesManager.findShortPath(typeFor(typ.model.modelClass), typ)
-                obj = self._ruleId(req.obj, path, typ, rsp.encoderPath)
+                path = self.resourcesManager.findGetModel(req.resourcePath, typ.model)
+                obj = self._convertId(req.obj, path, typ, rsp)
             elif isinstance(typ, TypeModel):
-                obj = self._ruleModel(req.obj, typ.model)
+                obj = self._convertModel(req.obj, typ.model, req, rsp)
             else:
                 raise AssertionError('Cannot encode object type %s' % typ)
             txt = TextIOWrapper(rsp.dispatch(), rsp.charSet, 'strict')
@@ -97,49 +96,56 @@ class EncodingJSONHandler(Processor):
         else:
             chain.process(req, rsp)
 
-    def _ruleListPath(self, paths, pencoder):
-        assert isinstance(pencoder, EncoderPath)
+    def _appendPath(self, pathsObj, path, rsp):
+        assert isinstance(path, Path), 'Invalid path %s' % path
+        assert isinstance(rsp, Response)
+        node = path.node
+        assert isinstance(node, NodePath)
+        pathsObj[self.converter.normalize(node.name)] = {self.attrPath:rsp.encoderPath.encode(path)}
+
+    def _convertListPath(self, paths, rsp):
         pathsObj = {}
         for path in paths:
-            assert isinstance(path, Path), 'Invalid path %s' % path
-            node = path.node
-            if isinstance(node, NodeModel):
-                assert isinstance(node, NodeModel)
-                pathsObj[self.converter.normalize(node.model.name)] = {self.attrPath:pencoder.encode(path)}
+            self._appendPath(pathsObj, path, rsp)
         return {self.converter.normalize(self.tagResources):pathsObj}
     
-    def _ruleId(self, id, path, typProp, pencoder):
+    def _convertId(self, id, path, typProp, rsp):
+        assert isinstance(rsp, Response)
         idObj = {self.converter.normalize(typProp.property.name):id}
         if path is not None:
             assert isinstance(path, Path)
             path.update(id, typProp)
-            idObj[self.converter.normalize(self.attrPath)] = pencoder.encode(path)
+            idObj[self.converter.normalize(self.attrPath)] = rsp.encoderPath.encode(path)
         return idObj
             
-    def _ruleListIds(self, ids, typProp, pencoder):
-        assert isinstance(pencoder, EncoderPath)
+    def _convertListIds(self, ids, typProp, req, rsp):
         assert isinstance(typProp, TypeProperty)
+        assert isinstance(req, Request)
         idsList = []
-        path = self.resourcesManager.findShortPath(typeFor(typProp.model.modelClass), typProp)
+        path = self.resourcesManager.findGetModel(req.resourcePath, typProp.model)
         for id in ids:
-            idsList.append(self._ruleId(id, path, typProp, pencoder))
+            idsList.append(self._convertId(id, path, typProp, rsp))
         return {self.converter.normalize(typProp.model.name + self.tagListSufix):idsList}
         
-    def _ruleModel(self, obj, model):
+    def _convertModel(self, obj, model, req, rsp):
         assert isinstance(model, Model)
+        assert isinstance(req, Request)
         modelObj = {}
         for prop in model.properties.values():
             assert isinstance(prop, Property)
             value = prop.get(obj)
             if value is not None:
                 modelObj[self.converter.normalize(prop.name)] = value
+        paths = self.resourcesManager.findGetAllAccessible(req.resourcePath)
+        for path in paths:
+            self._appendPath(modelObj, path, rsp)
         return {self.converter.normalize(model.name):modelObj}
         
-    def _ruleListModels(self, objects, model):
+    def _convertListModels(self, objects, model, req, rsp):
         assert isinstance(model, Model)
         modelsList = []
         for obj in objects:
-            modelsList.append(self._ruleModel(obj, model))
+            modelsList.append(self._convertModel(obj, model, req, rsp))
         return {self.converter.normalize(model.name + self.tagListSufix):modelsList}
 
 # --------------------------------------------------------------------

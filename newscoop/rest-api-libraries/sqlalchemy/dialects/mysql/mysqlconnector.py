@@ -113,7 +113,8 @@ class MySQLDialect_mysqlconnector(MySQLDialect):
         return tuple(version)
 
     def _detect_charset(self, connection):
-        return connection.connection.get_characterset_info()
+        #FIXED: gabriel (connection.connection.get_characterset_info())
+        return connection.connection.charset
 
     def _extract_error_code(self, exception):
         return exception.errno

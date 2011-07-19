@@ -2521,9 +2521,10 @@ class ResultMetaData(object):
         context = parent.context
         dialect = context.dialect
         typemap = dialect.dbapi_type_map
-
+        
         for i, rec in enumerate(metadata):
-            colname = rec[0]
+            #FIXED: gabriel (colname = rec[0])
+            colname = str(rec[0], dialect.encoding)
             coltype = rec[1]
 
             if dialect.description_encoding:
@@ -2548,7 +2549,7 @@ class ResultMetaData(object):
             # RowProxy (the C version uses a faster path for integer indexes).
             keymap[i] = rec
 
-            # Column names as keys 
+            # Column names as keys
             if keymap.setdefault(name.lower(), rec) is not rec: 
                 # We do not raise an exception directly because several
                 # columns colliding by name is not a problem as long as the

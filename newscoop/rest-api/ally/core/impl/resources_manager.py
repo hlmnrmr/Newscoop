@@ -9,16 +9,16 @@ Created on Jun 28, 2011
 Module containing the implementation for the resources manager.
 '''
 
-from inspect import isclass
 from ally.core.api.configure import serviceFor
-from ally.core.api.operator import Service
-from ally.core.api.type import List, TypeClass, Type, Input
+from ally.core.api.operator import Service, Model
+from ally.core.api.type import List, TypeClass
 from ally.core.impl.invoker import InvokerFunction, InvokerCall
-from ally.core.impl.node import NodeRoot
+from ally.core.impl.node import NodeRoot, NodePath, NodeModel, NodeId
 from ally.core.spec.resources import Node, Path, Converter, Match, Assembler, \
-    ResourcesManager, Invoker
-import logging
+    ResourcesManager, PathExtended
 from ally.core.util import injected
+from inspect import isclass
+import logging
 
 # --------------------------------------------------------------------
 
@@ -43,7 +43,10 @@ class ResourcesManagerImpl(ResourcesManager):
         if __debug__:
             for asm in self.assemblers:
                 assert isinstance(asm, Assembler), 'Invalid assembler %s' % asm
-        self._root = NodeRoot(InvokerFunction(List(TypeClass(Path, False)), self._rootPaths, [], 0))
+        def resources():
+            return self.findGetAllAccessible(self._rootPath)
+        self._root = NodeRoot(InvokerFunction(List(TypeClass(Path, False)), resources, [], 0))
+        self._rootPath = Path([], self._root)
         for service in self.services:
             self.register(serviceFor(service), service)
     
@@ -81,13 +84,7 @@ class ResourcesManagerImpl(ResourcesManager):
             for child in node.childrens():
                 assert isinstance(child, Node)
                 match = child.tryMatch(converter, paths)
-                if match is not None and match is not False:
-                    if isinstance(match, list):
-                        matches.extend(match)
-                    elif isinstance(match, Match):
-                        matches.append(match)
-                    elif match is not True:
-                        raise AssertionError('Invalid return value %s for %s' % (match, child))
+                if self._addMatch(matches, match):
                     node = child
                     found = True
                     break
@@ -95,91 +92,65 @@ class ResourcesManagerImpl(ResourcesManager):
             return Path(matches, node)
         return Path(matches)
     
-    def findAllPaths(self, outputType, *inputTypes):
+    def findGetModel(self, fromPath, model):
         '''
-        @see: ResourcesManager.findAllPaths
+        @see: ResourcesManager.findGetModel
         '''
-        assert outputType is None or isinstance(outputType, Type), 'Invalid output type in list %s' % outputType
-        if __debug__:
-            for typ in inputTypes:
-                assert isinstance(typ, Type), 'Invalid input type %s' % typ
-        nodes = []
-        self._searchGetNodes(self._root, outputType, inputTypes, nodes, False)
-        paths = []
-        for node in nodes:
-            paths.append(self._getPathForNode(node))
-        return paths
-    
-    def findShortPath(self, outputType, *inputTypes):
-        '''
-        @see: ResourcesManager.findPathForInputType
-        '''
-        assert outputType is None or isinstance(outputType, Type), 'Invalid output type in list %s' % outputType
-        if __debug__:
-            for typ in inputTypes:
-                assert isinstance(typ, Type), 'Invalid input type %s' % typ
-        nodes = []
-        self._searchGetNodes(self._root, outputType, inputTypes, nodes, True)
-        if len(nodes) > 0:
-            return self._getPathForNode(nodes[0])
+        assert isinstance(fromPath, Path), 'Invalid from path %s' % fromPath
+        assert isinstance(fromPath.node, Node), 'Invalid from path Node %s' % fromPath.node
+        assert isinstance(model, Model), 'Invalid model %s' % model
+        index = len(fromPath.matches) - 1
+        while index >= 0:
+            node = fromPath.matches[index].node
+            assert isinstance(node, Node)
+            if isinstance(node, NodeModel) and node.model == model:
+                for nodeId in node.childrens():
+                    if isinstance(nodeId, NodeId) and nodeId.get is not None:
+                        matches = []
+                        self._addMatch(matches, nodeId.newMatch())
+                        return PathExtended(fromPath, matches, nodeId, index + 1)
+            for child in node.childrens():
+                assert isinstance(child, Node)
+                if isinstance(child, NodeModel) and child.model == model:
+                    for nodeId in child.childrens():
+                        if isinstance(nodeId, NodeId) and nodeId.get is not None:
+                            matches = []
+                            self._addMatch(matches, child.newMatch())
+                            self._addMatch(matches, nodeId.newMatch())
+                            return PathExtended(fromPath, matches, nodeId, index + 1)
+            index -= 1
         return None
-
-    def _rootPaths(self):
-        '''
-        FOR INTERNAL USE ONLY.
-        Provides the root resources paths.
         
-        @return: list
-            A list of Paths from the root node.
+    def findGetAllAccessible(self, fromPath):
         '''
+        @see: ResourcesManager.findGetAllAccessible
+        '''
+        assert isinstance(fromPath, Path), 'Invalid from path %s' % fromPath
+        assert isinstance(fromPath.node, Node), 'Invalid from path Node %s' % fromPath.node
         paths = []
-        for child in self._root.childrens():
+        for child in fromPath.node.childrens():
             assert isinstance(child, Node)
-            if child.get is not None:
-                match = child.newMatch()
-                if match is not None:
-                    paths.append(Path([match], child))
+            if child.get is not None and isinstance(child, NodePath):
+                matches = []
+                self._addMatch(matches, child.newMatch())
+                if all([match.isValid() for match in matches]):
+                    extended = PathExtended(fromPath, matches, child)
+                    paths.append(extended)
+                    paths.extend(self.findGetAllAccessible(extended))
         return paths
 
-    def _searchGetNodes(self, node, outputType, inputTypes, nodes, onlyOne):
+    def _addMatch(self, matches, match):
         '''
         FOR INTERNAL USE ONLY.
-        Finds the node that has the specified input types list.
+        Adds the match to the matches list, returns True if the match(es) have been added successfully, False if no
+        match was added.
         '''
-        assert isinstance(node, Node)
-        if node.get is not None:
-            get = node.get
-            assert isinstance(get, Invoker)
-            equals = True
-            if outputType is not None and get.outputType != outputType:
-                equals = False
-            if equals and get.mandatoryCount == len(inputTypes):
-                for inp, typ in zip(get.inputs, inputTypes):
-                    assert isinstance(inp, Input)
-                    if inp.type != typ:
-                        equals = False
-                        break
-            if equals:
-                nodes.append(node)
-                if onlyOne: return True
-        for child in node.childrens():
-            if self._searchGetNodes(child, outputType, inputTypes, nodes, onlyOne):
-                return True
-
-    def _getPathForNode(self, node):
-        '''
-        FOR INTERNAL USE ONLY.
-        Builds a Path for the node.
-        '''
-        n = node
-        assert isinstance(n, Node)
-        matches = []
-        while n is not None:
-            m = n.newMatch()
-            if m is not None:
-                if isinstance(m, list):
-                    matches[0:] = m
-                else:
-                    matches.insert(0, m)
-            n = n.parent
-        return Path(matches, node)
+        if match is not None and match is not False:
+            if isinstance(match, list):
+                matches.extend(match)
+            elif isinstance(match, Match):
+                matches.append(match)
+            elif match is not True:
+                raise AssertionError('Invalid match value %s') % match
+            return True
+        return False

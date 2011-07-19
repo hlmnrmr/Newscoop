@@ -33,11 +33,9 @@ class IssueServiceAlchemy(EntityServiceAlchemy, IIssueService):
         '''
         @see: ISectionService.forPublication
         '''
-        aq = self.session().query(im.Id).filter(im.publication == publicationId)
+        aq = self.session().query(Issue).filter(im.publication == publicationId)
         if q is not None:
             aq = self.buildQuery(aq, q)
         if offset is not None: aq = aq.offset(offset)
         if limit is not None: aq = aq.limit(limit)
-        # SQL alchemy returns the id in a tuple
-        ids = (tup[0] for tup in aq.all())
-        return ids
+        return aq.all()

@@ -9,7 +9,6 @@ Created on Jun 28, 2011
 Provides the URI request path handler.
 '''
 
-from ally.core.impl.node import NodeModel
 from ally.core.internationalization import msg as _
 from ally.core.spec.codes import RESOURCE_NOT_FOUND, RESOURCE_FOUND, \
     UNKNOWN_FORMAT
@@ -122,7 +121,7 @@ class EncoderPathURI(EncoderPath):
         uri = self._uri
         assert isinstance(uri, URIHandler)
         paths = path.asPaths(uri.converter)
-        if isinstance(path.node, NodeModel): paths.append('')
+        if path.node.isGroup: paths.append('')
         if self._ext is not None: paths.append('.' + self._ext)
         query = urlencode(parameters) if parameters is not None else ''
         return urlunsplit((uri.scheme, uri.netloc, '/'.join(paths), query, ''))

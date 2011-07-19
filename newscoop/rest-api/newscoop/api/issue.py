@@ -45,7 +45,7 @@ class IIssueService(IEntityService):
     Provides services for issue.
     '''
     
-    @call(Iter(Issue.Id), Publication.Id, int, int, QIssue)
+    @call(Iter(Issue), Publication.Id, int, int, QIssue)
     def forPublication(self, publicationId, offset=None, limit=None, q=None):
         '''
         Provides all the issues that belong to the publication.

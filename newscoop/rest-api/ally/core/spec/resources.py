@@ -110,6 +110,57 @@ class Path:
                 paths.extend(path)
             paths.append(path)
         return paths
+    
+    def clone(self):
+        '''
+        Clones the path and all match content, any action on the cloned path will node affect the original path.
+        
+        @return: Path
+            The cloned path.
+        '''
+        return Path([match.clone() for match in self.matches], self.node)
+        
+class PathExtended(Path):
+    '''
+    The extended path will be directly linked with the matches of the parent path. The basic idea is that if the
+    parent path gets updated than also all the paths that extend it will be updated.
+    The extended path can only be constructed base on a valid path (has to have a node) and also it needs to be
+    valid (to have a node for it self).
+    @see: Path
+    '''
+    
+    def __init__(self, parent, matches, node, index=None):
+        '''
+        @see: Path.__init__
+        
+        @param parent: Path
+            The parent path that is extended.
+        @param index: integer|None 
+            The index in the parent path from which this path is extended, None will consider all the matches from
+            the parent path.
+        '''
+        assert isinstance(parent, Path), 'Invalid parent path %' % parent
+        assert isinstance(parent.node, Node), 'Invalid parent path node %' % parent.node
+        assert isinstance(node, Node), 'Invalid node %' % node
+        if index is None:
+            index = len(parent.matches)
+        else:
+            assert isinstance(index, int), 'Invalid index %s' % index
+            assert index >= 0 and index <= len(parent.matches), \
+            'Invalid index %s, needs to be greater than 0 and less than the parent matches' % index
+        self.parent = parent
+        self.index = index
+        self.matchesOwned = matches
+        all = parent.matches[:index]
+        all.extend(matches)
+        super().__init__(all, node)
+        
+    def clone(self):
+        '''
+        @see: Path.clone
+        '''
+        return PathExtended(self.parent.clone(), [match.clone() for match in self.matchesOwned], self.node, \
+                            self.index)
 
 @guard
 class Assembler(metaclass=abc.ABCMeta):
@@ -168,7 +219,7 @@ class Converter(metaclass=abc.ABCMeta):
         if isinstance(objValue, int):
             return self.convertInt(objValue)
         if isinstance(objValue, numbers.Number):
-            return self.convertInt(objValue)
+            return self.convertDecimal(objValue)
         raise AssertionError('Invalid object value %s of type %s' % (objValue, objValue.__class__))
         
     def asValue(self, strValue, objType):
@@ -190,7 +241,7 @@ class Converter(metaclass=abc.ABCMeta):
         if objType == int:
             return self.convertInt(parse=strValue)
         if objType == numbers.Number:
-            return self.convertInt(parse=strValue)
+            return self.convertDecimal(parse=strValue)
         raise AssertionError('Invalid object type %s' % objType)
     
     @abc.abstractmethod
@@ -304,6 +355,15 @@ class Match(metaclass=abc.ABCMeta):
         @raise AssertionError:
             If the path cannot be represented, check first the 'isValid' method.
         '''
+    
+    @abc.abstractmethod
+    def clone(self):
+        '''
+        Clones the match and all content related to it.
+        
+        @return: Match
+            The cloned match.
+        '''
         
     @abc.abstractmethod
     def __eq__(self, other):
@@ -368,12 +428,14 @@ class Node(metaclass=abc.ABCMeta):
     meaning that not two nodes should be valid for the same path.
     '''
     
-    def __init__(self, parent, order):
+    def __init__(self, parent, isGroup, order):
         '''
         Constructs a resource node. 
         
         @param parent: Node|None 
             The parent node of this node, can be None if is a root node.
+        @param isGroup: boolean 
+            True if the node represents a group of models, false otherwise.
         @param order: integer 
             The order index of the node, this will be used in correctly ordering the children's to have a proper
             order when searching for path matching.
@@ -389,8 +451,10 @@ class Node(metaclass=abc.ABCMeta):
             The list of node children's.
         '''
         assert parent is None or isinstance(parent, Node), 'Invalid parent %s, can be None' % parent
+        assert isinstance(isGroup, bool), 'Invalid is group flag %s' % isGroup
         assert isinstance(order, int), 'Invalid order %s' % order
         self.parent = parent
+        self.isGroup = isGroup
         self.order = order
         self.get = None
         self.insert = None
@@ -490,29 +554,29 @@ class ResourcesManager(metaclass=abc.ABCMeta):
         '''
     
     @abc.abstractmethod
-    def findAllPaths(self, outputType, *inputTypes):
+    def findGetModel(self, fromPath, model):
         '''
-        Finds all the resource nodes that has a get method having the provided input type(s).
+        Finds the path for the first Node that provides a get for the model. The search is made based
+        on the from path. First the from path Node and is children's are searched for the get method if 
+        not found it will go to the Nodes parent and make the search there, so forth and so on.
         
-        @param outputType: Type|None
-            The output type to locate the path for, None if not required.
-        @param inputTypes: tuple
-            The input types tuple to locate the path for.
-        @return: list
-            A list of paths leading to the nodes having a get method with the requested input type(s), might be
-            empty if no such nodes exist.
+        @param fromPath: Path
+            The path to make the search based on.
+        @param model: Model
+            The model to search the get for.
+        @return: PathExtended|None
+            The extended path pointing to the desired get method, attention some updates might be necessary on 
+            the path to be available. None if the path could not be found.
         '''
-
+    
     @abc.abstractmethod
-    def findShortPath(self, outputType, *inputTypes):
+    def findGetAllAccessible(self, fromPath):
         '''
-        Finds the resource node that has a get method having the provided input type(s) that is has the shortest
-        path leading to it.
+        Finds all paths that can be directly accessed without the need of any path update, basically all
+        paths that can be directly related to the provided path without any additional information.
         
-        @param outputType: Type|None
-            The output type to locate the path for, None if not required.
-        @param inputTypes: tuple
-            The input types tuple to locate the path for.
-        @return: Path|None
-            The shortest path leading to the node or None if no node is found.
+        @param fromPath: Path
+            The path to make the search based on.
+        @return: list
+            A list of PathExtended from the provided from path that are accessible, empty list if none found.
         '''

@@ -18,6 +18,7 @@ from ally.core.api.type import TypeProperty, typeFor, TypeModel, List, Type, \
     TypeQuery, Iter, Input
 from ally.core.util import fullyQName, guard
 import logging
+from collections import OrderedDict
 
 # --------------------------------------------------------------------
 
@@ -133,7 +134,9 @@ class APIModel(Callable):
         else:
             assert isinstance(model, Model)
             # Cloning the inherited properties, since they have to belong now to this model.
-            allProperties = {prop.name:Property(prop.name, prop.type) for prop in model.properties.values()}
+            allProperties = OrderedDict()
+            for prop in model.properties.values():
+                allProperties[prop.name] = Property(prop.name, prop.type)
             allProperties.update(properties)
             model = Model(modelClass, allProperties)
         propertiesFor(modelClass, model)
@@ -321,7 +324,7 @@ class APICriteria(Callable):
             criteria = Criteria(criteriaClass, properties)
         else:
             assert isinstance(criteria, Criteria)
-            allProperties = dict(criteria.properties)
+            allProperties = OrderedDict(criteria.properties)
             allProperties.update(properties)
             criteria = Criteria(criteriaClass, allProperties)
         propertiesFor(criteriaClass, criteria)
@@ -457,7 +460,7 @@ class APIService(Callable):
             assert not len(calls) == 0, 'There are no API calls on service class %s' % calls
             service = Service(propertiesFor(self.modelClass), serviceClass, calls)
         else:
-            allCalls = {}
+            allCalls = OrderedDict()
             for parent in parentServices:
                 assert isinstance(parent, Service)
                 model = propertiesFor(self.modelClass)
@@ -528,7 +531,7 @@ def _processAPIProperties(propertiesClass):
         A dictionary containing as a key the property name and as a value the property.
     '''
     log.info('Processing properties for %s', propertiesClass)
-    properties = {}
+    properties = OrderedDict()
     for name, value in propertiesClass.__dict__.items():
         if name in _IGNORE_NAMES or isfunction(value):
             continue
@@ -560,7 +563,7 @@ def _processAPIEntries(queryClass):
         A dictionary containing as a key the entry name and as a value the entry.
     '''
     log.info('Processing entries for query %s', queryClass)
-    entries = {}
+    entries = OrderedDict()
     for name, value in queryClass.__dict__.items():
         if name in _IGNORE_NAMES or isfunction(value):
             continue
@@ -597,7 +600,7 @@ def _processAPICalls(serviceClass):
         API call decorated function.
     '''
     log.info('Processing calls for %s', serviceClass)
-    calls = {}
+    calls = OrderedDict()
     for name, func in serviceClass.__dict__.items():
         if isfunction(func):
             apiCall = None

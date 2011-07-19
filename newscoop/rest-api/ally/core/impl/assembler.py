@@ -10,8 +10,9 @@ Provides the call assemblers used in constructing the resources node.
 '''
 
 from ally.core.api.operator import Model, Property
-from ally.core.api.type import TypeProperty, TypeModel, TypeId, Iter, Input, \
+from ally.core.api.type import TypeProperty, TypeModel, TypeId, Iter, \
     isPropertyTypeId, isTypeId
+from ally.core.impl.invoker import InvokerUpdateModel
 from ally.core.impl.node import NodeModel, NodeId
 from ally.core.spec.resources import Assembler, Node, Invoker
 import abc
@@ -20,33 +21,6 @@ import logging
 # --------------------------------------------------------------------
 
 log = logging.getLogger(__name__)
-
-# --------------------------------------------------------------------
-
-class InvokerUpdateModel(Invoker):
-    '''
-    Wraps an update invoker that has the signature like bool%(Entity) to look like bool%(Entity.Id, Entity) which
-    is the form that is called by the delete action.
-    '''
-    
-    def __init__(self, invoker, typeProperty):
-        assert isinstance(invoker, Invoker), 'Invalid invoker %s' % invoker
-        assert isinstance(typeProperty, TypeProperty), 'Invalid type property %s' % typeProperty
-        modelInput = invoker.inputs[0]
-        inputs = [Input(modelInput.name + 'Id', typeProperty), modelInput]
-        super().__init__(invoker.outputType, invoker.name, inputs, len(inputs))
-        self.invoker = invoker
-        self.property = typeProperty.property
-        
-    def invoke(self, *args):
-        '''
-        First argument is the id and the second the entity.
-        @see: Invoker.invoke
-        '''
-        prop = self.property
-        assert isinstance(prop, Property)
-        prop.set(args[1], args[0])
-        return self.invoker.invoke(args[1])
 
 # --------------------------------------------------------------------
 

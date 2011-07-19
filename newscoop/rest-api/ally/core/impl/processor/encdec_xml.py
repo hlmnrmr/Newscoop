@@ -12,13 +12,12 @@ Provides the XML encoding handler.
 from _pyio import TextIOWrapper
 from ally.core.api.exception import InputException
 from ally.core.api.operator import Model, Property, PropertySepcification
-from ally.core.api.type import TypeProperty, typeFor, Iter, TypeModel, \
+from ally.core.api.type import TypeProperty, Iter, TypeModel, \
     isPropertyTypeId, Input, isTypeId
-from ally.core.impl.node import NodeModel
+from ally.core.impl.node import NodePath
 from ally.core.internationalization import msg as _
 from ally.core.spec import charset as cs, content_type as ct
 from ally.core.spec.codes import BAD_CONTENT
-from ally.core.spec.presenting import EncoderPath
 from ally.core.spec.resources import Path, ResourcesManager, Converter, Invoker
 from ally.core.spec.server import Processor, Request, Response, ProcessorsChain, \
     INSERT, UPDATE, Content
@@ -86,18 +85,18 @@ class EncodingXMLHandler(Processor):
             elif isinstance(typ, Iter):
                 assert isinstance(typ, Iter)
                 if typ.forClass() == Path:
-                    self._encodeListPath(xml, req.obj, rsp.encoderPath)
+                    self._encodeListPath(xml, req.obj, rsp)
                 elif isPropertyTypeId(typ.itemType):
-                    self._encodeListIds(xml, req.obj, typ.itemType, rsp.encoderPath)
+                    self._encodeListIds(xml, req.obj, typ.itemType, req, rsp)
                 elif isinstance(typ.itemType, TypeModel):
-                    self._encodeListModels(xml, req.obj, typ.itemType.model)
+                    self._encodeListModels(xml, req.obj, typ.itemType.model, req, rsp)
                 else:
                     raise AssertionError('Cannot encode list item object type %s' % typ.itemType)
             elif isPropertyTypeId(typ):
-                path = self.resourcesManager.findShortPath(typeFor(typ.model.modelClass), typ)
-                self._encodeId(xml, req.obj, path, typ, rsp.encoderPath)
+                path = self.resourcesManager.findGetModel(req.resourcePath, typ.model)
+                self._encodeId(xml, req.obj, path, typ, rsp)
             elif isinstance(typ, TypeModel):
-                self._encodeModel(xml, req.obj, typ.model)
+                self._encodeModel(xml, req.obj, typ.model, req, rsp)
             else:
                 raise AssertionError('Cannot encode object type %s' % typ)
             log.debug('Encoded to XML using character set %s', rsp.charSet)
@@ -105,50 +104,54 @@ class EncodingXMLHandler(Processor):
         else:
             chain.process(req, rsp)
 
-    def _encodeListPath(self, xml, paths, pencoder):
+    def _encodePath(self, xml, path, rsp):
         assert isinstance(xml, XMLGenerator)
-        assert isinstance(pencoder, EncoderPath)
+        assert isinstance(path, Path), 'Invalid path %s' % path
+        assert isinstance(rsp, Response)
+        node = path.node
+        assert isinstance(node, NodePath)
+        pathName = self.converter.normalize(node.name)
+        xml.startElement(pathName, {self.attrPath:rsp.encoderPath.encode(path)})
+        xml.endElement(pathName)
+
+    def _encodeListPath(self, xml, paths, rsp):
+        assert isinstance(xml, XMLGenerator)
         listName = self.converter.normalize(self.tagResources)
         xml.startElement(listName, {})
         for path in paths:
-            assert isinstance(path, Path), 'Invalid path %s' % path
-            node = path.node
-            if isinstance(node, NodeModel):
-                assert isinstance(node, NodeModel)
-                pathName = self.converter.normalize(node.model.name)
-                xml.startElement(pathName, {self.attrPath:pencoder.encode(path)})
-                xml.endElement(pathName)
+            self._encodePath(xml, path, rsp)
         xml.endElement(listName)
     
-    def _encodeId(self, xml, id, path, typProp, pencoder):
+    def _encodeId(self, xml, id, path, typProp, rsp):
         assert isinstance(xml, XMLGenerator)
-        assert isinstance(pencoder, EncoderPath)
+        assert isinstance(rsp, Response)
         assert isinstance(typProp, TypeProperty)
         if path is None:
             attrs = {}
         else:
             assert isinstance(path, Path)
             path.update(id, typProp)
-            attrs = {self.attrPath:pencoder.encode(path)}
-            propName = self.converter.normalize(typProp.property.name)
+            attrs = {self.attrPath:rsp.encoderPath.encode(path)}
+        propName = self.converter.normalize(typProp.property.name)
         xml.startElement(propName, attrs)
         xml.characters(self.converter.asString(id))
         xml.endElement(propName)
         
-    def _encodeListIds(self, xml, ids, typProp, pencoder):
+    def _encodeListIds(self, xml, ids, typProp, req, rsp):
         assert isinstance(xml, XMLGenerator)
-        assert isinstance(pencoder, EncoderPath)
         assert isinstance(typProp, TypeProperty)
+        assert isinstance(req, Request)
         listName = self.converter.normalize(typProp.model.name + self.tagListSufix)
         xml.startElement(listName, {})
-        path = self.resourcesManager.findShortPath(typeFor(typProp.model.modelClass), typProp)
+        path = self.resourcesManager.findGetModel(req.resourcePath, typProp.model)
         for id in ids:
-            self._encodeId(xml, id, path, typProp, pencoder)
+            self._encodeId(xml, id, path, typProp, rsp)
         xml.endElement(listName)
         
-    def _encodeModel(self, xml, obj, model):
+    def _encodeModel(self, xml, obj, model, req, rsp):
         assert isinstance(xml, XMLGenerator)
         assert isinstance(model, Model)
+        assert isinstance(req, Request)
         modelName = self.converter.normalize(model.name)
         xml.startElement(modelName, {})
         for prop in model.properties.values():
@@ -159,17 +162,19 @@ class EncodingXMLHandler(Processor):
                 xml.startElement(propName, {})
                 xml.characters(self.converter.asString(value))
                 xml.endElement(propName)
+        paths = self.resourcesManager.findGetAllAccessible(req.resourcePath)
+        for path in paths:
+            self._encodePath(xml, path, rsp)
         xml.endElement(modelName)
         
-    def _encodeListModels(self, xml, objects, model):
+    def _encodeListModels(self, xml, objects, model, req, rsp):
         assert isinstance(xml, XMLGenerator)
         assert isinstance(model, Model)
         listName = self.converter.normalize(model.name + self.tagListSufix)
         xml.startElement(listName, {})
         for obj in objects:
-            self._encodeModel(xml, obj, model)
+            self._encodeModel(xml, obj, model, req, rsp)
         xml.endElement(listName)
-
 
 # --------------------------------------------------------------------
     
@@ -213,11 +218,11 @@ class DecodingXMLHandler(Processor):
             assert isinstance(inp, Input)
             charSet = rsp.charSet or self.charSetDefault
             if isinstance(inp.type, TypeModel):
-                root = self._createModel(inp.type.model)
+                rule = self._ruleModel(inp.type.model)
             else:
                 raise AssertionError('Cannot decode object input %s' % inp)
             try:
-                value = Digester(root).parse(charSet, cnt)
+                value = Digester(rule).parse(charSet, cnt)
                 req.arguments[inp.name] = value
                 log.debug('Successfully decoded for input (%s) value %s', inp.name, value)
             except InputException as e:
@@ -227,7 +232,7 @@ class DecodingXMLHandler(Processor):
         else:
             chain.process(req, rsp)
         
-    def _createModel(self, model):
+    def _ruleModel(self, model):
         assert isinstance(model, Model)
         root = RuleRoot()
         rmodel = root.addRule(RuleModel(model), self.converter.normalize(model.name))
@@ -519,7 +524,7 @@ class RuleSetProperty(Rule):
             value = self._valueConverter.asValue(content, self._property.type.forClass())
         except ValueError:
             raise InputException(_('Invalid value ($1) expected type $2 on path $3 at line $4 and column $5', \
-    content, self._valueType, digester.currentPath(), digester.getLineNumber(), digester.getColumnNumber()))
+    content, self._property.type, digester.currentPath(), digester.getLineNumber(), digester.getColumnNumber()))
         if self._specification is not None and not self._specification.isValidLength(value):
             raise InputException(_('Expected a maximum length of $1, at line $2 and column $3', \
                         self._specification.length, digester.getLineNumber(), digester.getColumnNumber()))
