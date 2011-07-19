@@ -12,9 +12,9 @@ Provides unit testing for the decorator module.
 from ally.core import util
 util.GUARD_ENABLED = False
 import logging
-from ally.core.api.criteria import AsOrdered, AsLike
 logging.basicConfig(level=logging.DEBUG)
 
+from ally.core.api.criteria import AsOrdered, AsLike
 from ally.core.api.configure import APIModel as model, APIService as service, \
     APICall as call, APIProperty as prop, APIQuery as query, \
     APIEntry as entry, propertiesFor
@@ -145,7 +145,7 @@ class TestConfigure(unittest.TestCase):
 
     def testSuccesCondition(self):
         q = TestQuery()
-        
+
         self.assertTrue(q.age.orderAscending == None)
         q.age.orderAscending = True
         self.assertTrue(q.age.index() == 1)

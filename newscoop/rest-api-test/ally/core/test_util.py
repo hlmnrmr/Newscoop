@@ -8,6 +8,7 @@ Created on Jun 12, 2011
 
 Provides unit testing for the util module.
 '''
+
 import unittest
 from ally.core.util import Singletone, Uninstantiable, guard, Protected
 import builtins
