@@ -33,7 +33,7 @@ function clean_statistics($p_confDir)
 		GROUP BY
 			ss.id
     ";
-    
+
     $sessRes = mysql_query($sql);
     if (empty($sessRes)) {
         return;
@@ -87,3 +87,5 @@ function is_valid_conf_dir($p_conf_dir)
 
 // runs the script
 clean_statistics(WWW_DIR . '/conf');
+
+session_destroy();
